@@ -171,20 +171,6 @@ namespace BackEnd.Services.ProductServices
 
             var now = DateTime.UtcNow;
 
-            var orderItems = await _context.OrderItems.Where(i => i.ProductId == id).Include(i => i.Order).ToListAsync();
-            foreach(var item in orderItems)
-            {
-                item.ProductName = "محصول حذف شده";
-                item.ProductId = null;
-
-                if (item.Order.Status is OrderStatus.Pending or OrderStatus.Approved)
-                {
-                    item.Order.Status = OrderStatus.CancelledByAdmin;
-                    item.Order.DecisionReason = "سفارش به دلیل حذف یکی از محصولات لغو شد.";
-                    item.Order.FinalizedAt = now;
-                }
-            }
-
             var cartItems = await _context.CartItems.Where(i => i.ProductId == id).ToListAsync();
 
             _context.CartItems.RemoveRange(cartItems);
@@ -230,17 +216,6 @@ namespace BackEnd.Services.ProductServices
                 _context.CartItems.RemoveRange(cartItems);
 
                 var now = DateTime.UtcNow;
-
-                var orderItems = await _context.OrderItems.Where(i => i.ProductId == id).Include(i => i.Order).ToListAsync();
-
-                var affectedOrders = orderItems.Select(i => i.Order).GroupBy(o => o.Id).Select(g => g.First()).Where(o => o.Status == OrderStatus.Pending).ToList();
-
-                foreach (var order in affectedOrders)
-                {
-                    order.Status = OrderStatus.CancelledByAdmin;
-                    order.DecisionReason = "سفارش به دلیل لغو تأیید یکی از محصولات لغو شد.";
-                    order.FinalizedAt = now;
-                }
             }
 
             await _context.SaveChangesAsync();

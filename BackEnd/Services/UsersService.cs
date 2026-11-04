@@ -138,39 +138,6 @@ namespace BackEnd.Services
 
             var now = DateTime.UtcNow;
 
-            var affectedOrders = await _context.Orders.Include(o => o.Items).Include(o => o.SellerFulfillments).Where(o => o.CustomerId == id || o.Items.Any(i => i.SellerId == id) || o.SellerFulfillments.Any(f => f.SellerId == id)).ToListAsync();
-
-            foreach (var order in affectedOrders)
-            {
-                if (order.CustomerId == id)
-                {
-                    order.CustomerUserName = "کاربر حذف شده";
-                    order.CustomerId = null;
-                }
-
-                var affectedSeller = order.Items.Any(i => i.SellerId == id) || order.SellerFulfillments.Any(f => f.SellerId == id);
-
-                if (affectedSeller)
-                {
-                    foreach (var item in order.Items.Where(i => i.SellerId == id))
-                    {
-                        item.SellerId = null;
-                    }
-
-                    foreach (var fulfillment in order.SellerFulfillments.Where(f => f.SellerId == id))
-                    {
-                        fulfillment.SellerId = null;
-                    }
-                }
-
-                if (order.Status is OrderStatus.Pending or OrderStatus.Approved)
-                {
-                    order.Status = OrderStatus.CancelledByAdmin;
-                    order.DecisionReason = "سفارش به دلیل حذف مشتری یا فروشنده لغو شد.";
-                    order.FinalizedAt = now;
-                }
-            }
-
             var products = await _context.Products.Where(p => p.SellerId == id).ToListAsync();
             foreach (var product in products)
             {
