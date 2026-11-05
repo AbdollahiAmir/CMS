@@ -1,16 +1,13 @@
-﻿using BackEnd.DTOs.ProductDTOs;
+﻿using BackEnd.Data;
+using BackEnd.DTOs.ProductDTOs;
 using BackEnd.IServices.IProductServices;
-using BackEnd.Models;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace BackEnd.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin,Seller")]
     public class ProductsController : ControllerBase
     {
         private readonly IProductService _service;
@@ -20,116 +17,18 @@ namespace BackEnd.Controllers
             _service = service;
         }
 
-        private string? CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier);
-        private bool IsAdmin => User.IsInRole("Admin");
-
         [HttpGet]
-        public async Task<IActionResult> GetAllProducts()
+        [Authorize(Policy = AppPermissions.ProductsView)]
+        public async Task<IActionResult> GetAllProducts([FromQuery] ProductQueryDto query)
         {
-            var userId = CurrentUserId;
-            if (string.IsNullOrEmpty(userId))
-            {
-                return Unauthorized();
-            }
-
-            var products = await _service.GetAllAsync(userId, IsAdmin);
-
-            return Ok(products);
+            return Ok(await _service.GetAllAsync(query));
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
+        [Authorize(Policy = AppPermissions.ProductsView)]
         public async Task<IActionResult> GetProductById(int id)
         {
-            var userId = CurrentUserId;
-            if (string.IsNullOrEmpty(userId))
-            {
-                return Unauthorized();
-            }
-
-            var product = await _service.GetByIdAsync(id, userId, IsAdmin);
-            if(product is null)
-            {
-                return NotFound();
-            }
-
-            return Ok(product);
-        }
-
-        [HttpPost]
-        [Consumes("multipart/form-data")]
-        public async Task<IActionResult> CreateProduct([FromForm] CreateProductDto dto)
-        {
-            var userId = CurrentUserId;
-            if (string.IsNullOrEmpty(userId))
-            {
-                return Unauthorized();
-            }
-
-            if (string.IsNullOrWhiteSpace(dto.Name))
-            {
-                return BadRequest("نام محصول الزامی است");
-            }
-
-            if (dto.Price <= 0)
-            {
-                return BadRequest("قیمت باید از 0 بیشتر باشد");
-            }
-
-            if (dto.ImgFile is not null && (dto.ImgFile.Length == 0 || dto.ImgFile.Length > 5 * 1024 * 1024))
-            {
-                return BadRequest("حجم عکس نباید بیشتر از 5 مگابایت باشد");
-            }
-
-            Product product;
-
-            try
-            {
-                product = await _service.CreateAsync(dto, userId, IsAdmin);
-            }
-            catch(ArgumentException)
-            {
-                return BadRequest("دسته بندی نامعتبر");
-            }
-
-            return CreatedAtAction(nameof(GetProductById), new { id = product.Id }, product);
-        }
-
-        [HttpPatch("{id}")]
-        [Consumes("multipart/form-data")]
-        public async Task<IActionResult> EditProduct(int id, [FromForm] PatchProductDto dto)
-        {
-            var userId = CurrentUserId;
-            if (string.IsNullOrEmpty(userId))
-            {
-                return Unauthorized();
-            }
-
-            if (dto.Name is not null && string.IsNullOrWhiteSpace(dto.Name))
-            {
-                return BadRequest("نام محصول نمیتواند خالی باشد");
-            }
-
-            if (dto.Price.HasValue && dto.Price.Value <= 0)
-            {
-                return BadRequest("فیمت محصول باید بیشتر از 0 باشد");
-            }
-
-            if (dto.ImgFile is not null && (dto.ImgFile.Length == 0 || dto.ImgFile.Length > 5 * 1024 * 1024))
-            {
-                return BadRequest("حجم عکس باید از 5 مگابایت کمتر باشد");
-            }
-
-            Product? product;
-
-            try
-            {
-                product = await _service.PatchAsync(id, dto, userId, IsAdmin);
-            }
-            catch (ArgumentException)
-            {
-                return BadRequest("دسته بندی نامعتبر");
-            }
-
+            var product = await _service.GetByIdAsync(id);
             if (product is null)
             {
                 return NotFound();
@@ -138,17 +37,49 @@ namespace BackEnd.Controllers
             return Ok(product);
         }
 
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteProduct(int id)
+        [HttpGet("{id:int}/image")]
+        [Authorize(Policy = AppPermissions.ProductsView)]
+        public async Task<IActionResult> GetProductImage(int id)
         {
-            var userId = CurrentUserId;
-            if (string.IsNullOrEmpty(userId))
+            var image = await _service.GetProductImageAsync(id);
+            if (image is null)
             {
-                return Unauthorized();
+                return NotFound();
             }
 
-            var deleted = await _service.DeleteAsync(id, userId, IsAdmin);
-            if(!deleted)
+            return File(image.Value.Stream, image.Value.ContentType);
+        }
+
+        [HttpPost]
+        [Consumes("multipart/form-data")]
+        [Authorize(Policy = AppPermissions.ProductsManage)]
+        public async Task<IActionResult> CreateProduct([FromForm] CreateProductDto dto)
+        {
+            var product = await _service.CreateAsync(dto);
+
+            return CreatedAtAction(nameof(GetProductById), new { id = product.Id }, product);
+        }
+
+        [HttpPatch("{id:int}")]
+        [Consumes("multipart/form-data")]
+        [Authorize(Policy = AppPermissions.ProductsManage)]
+        public async Task<IActionResult> EditProduct(int id, [FromForm] PatchProductDto dto)
+        {
+            var product = await _service.PatchAsync(id, dto);
+            if (product is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(product);
+        }
+
+        [HttpDelete("{id:int}")]
+        [Authorize(Policy = AppPermissions.ProductsManage)]
+        public async Task<IActionResult> DeleteProduct(int id)
+        {
+            var deleted = await _service.DeleteAsync(id);
+            if (!deleted)
             {
                 return NotFound();
             }
@@ -156,44 +87,17 @@ namespace BackEnd.Controllers
             return NoContent();
         }
 
-        [HttpPatch("{id}/approval")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> SetApproval(int id, [FromQuery] bool isApproved)
+        [HttpPatch("{id:int}/active")]
+        [Authorize(Policy = AppPermissions.ProductsToggleActive)]
+        public async Task<IActionResult> SetActive(int id, SetProductActiveDto dto)
         {
-            try
-            {
-                var product = await _service.SetApprovalAsync(id, isApproved);
-
-                if (product is null)
-                    return NotFound();
-
-                return Ok(product);
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(new
-                {
-                    message = ex.Message
-                });
-            }
-        }
-
-        [HttpGet("{id}/image")]
-        public async Task<IActionResult> GetProductImage(int id)
-        {
-            var userId = CurrentUserId;
-            if (string.IsNullOrEmpty(userId))
-            {
-                return Unauthorized();
-            }
-
-            var image = await _service.GetProductImageAsync(id, userId, IsAdmin);
-            if(image is null)
+            var product = await _service.SetActiveAsync(id, dto.IsActive);
+            if (product is null)
             {
                 return NotFound();
             }
 
-            return File(image.Value.Stream, image.Value.ContentType);
+            return Ok(product);
         }
     }
 }

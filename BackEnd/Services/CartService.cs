@@ -8,6 +8,8 @@ namespace BackEnd.Services
 {
     public class CartService : ICartService
     {
+        private const int MaxItemQuantity = 100;
+
         private readonly AppDbContext _context;
 
         public CartService(AppDbContext context)
@@ -18,7 +20,7 @@ namespace BackEnd.Services
         private async Task<Cart> GetOrCreateCartAsync(string userId)
         {
             var cart = await _context.Carts.FirstOrDefaultAsync(c => c.UserId == userId);
-            if(cart is not null)
+            if (cart is not null)
             {
                 return cart;
             }
@@ -36,32 +38,41 @@ namespace BackEnd.Services
 
         private async Task RemoveUnavailableItemsAsync(int cartId)
         {
-            var unavailableItems = await _context.CartItems.Include(i => i.Product)
-                .Where(i => i.CartId == cartId && (i.Product == null || !i.Product.IsApproved || i.Product.SellerId == null ||i.Product.SellerId == ""))
+            var unavailableItems = await _context.CartItems
+                .Where(i => i.CartId == cartId && (i.Product == null || !i.Product.IsActive))
                 .ToListAsync();
-            if(unavailableItems.Count < 0)
+
+            if (unavailableItems.Count == 0)
             {
                 return;
             }
 
-            _context.RemoveRange(unavailableItems);
+            _context.CartItems.RemoveRange(unavailableItems);
             await _context.SaveChangesAsync();
         }
 
         private async Task<CartDto> BuildCartDtoAsync(int cartId)
         {
-            var cart = await _context.Carts.AsNoTracking().Include(c => c.Items).ThenInclude(i => i.Product).FirstAsync(c => c.Id == cartId);
+            var cart = await _context.Carts.AsNoTracking()
+                .Include(c => c.Items)
+                .ThenInclude(i => i.Product)
+                .FirstAsync(c => c.Id == cartId);
 
             var items = cart.Items
-                .Where(i => (i.Product != null) && (i.Product.IsApproved) && !string.IsNullOrEmpty(i.Product.SellerId))
-                .Select(i => new CartItemDto
+                .Where(i => i.Product != null && i.Product.IsActive)
+                .Select(i =>
                 {
-                    ProductId = i.ProductId,
-                    ProductName = i.Product.Name,
-                    ImgPath = i.Product.ImgPath,
-                    Quantity = i.Quantity,
-                    UnitPrice = i.Product.Price,
-                    LineTotal = i.Quantity * i.Product.Price
+                    var unitPrice = i.Product.SalePrice ?? i.Product.Price;
+
+                    return new CartItemDto
+                    {
+                        ProductId = i.ProductId,
+                        ProductName = i.Product.Name,
+                        ImgPath = i.Product.ImgPath,
+                        Quantity = i.Quantity,
+                        UnitPrice = unitPrice,
+                        LineTotal = i.Quantity * unitPrice
+                    };
                 }).ToList();
 
             return new CartDto
@@ -83,48 +94,50 @@ namespace BackEnd.Services
 
         public async Task<CartDto> AddItemAsync(string userId, AddCartItemDto dto)
         {
-            if (dto.Quantity < 1 || dto.Quantity > 100)
+            if (dto.Quantity < 1 || dto.Quantity > MaxItemQuantity)
             {
                 throw new ArgumentException("تعداد محصول باید بین 1 تا 100 عدد باشد");
             }
 
             var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == dto.ProductId);
-            if(product is null)
+            if (product is null)
             {
                 throw new KeyNotFoundException("محصول یافت نشد");
             }
 
-            if(!product.IsApproved)
+            if (!product.IsActive)
             {
                 throw new InvalidOperationException("این محصول برای خرید در دسترس نیست");
-            }
-
-            if (string.IsNullOrWhiteSpace(product.SellerId))
-            {
-                throw new InvalidOperationException("این محصول فروشنده فعال ندارد");
             }
 
             var cart = await GetOrCreateCartAsync(userId);
             await RemoveUnavailableItemsAsync(cart.Id);
 
             var cartItem = await _context.CartItems.FirstOrDefaultAsync(i => i.CartId == cart.Id && i.ProductId == dto.ProductId);
-            if(cartItem is null)
+
+            var newQuantity = (cartItem?.Quantity ?? 0) + dto.Quantity;
+            if (newQuantity > MaxItemQuantity)
             {
-                cartItem = new CartItem
+                throw new ArgumentException("تعداد کل محصولات نمیتواند بیشتر از 100 عدد باشد.");
+            }
+
+            if (newQuantity > product.StockQuantity)
+            {
+                throw new InvalidOperationException("موجودی این محصول کافی نیست");
+            }
+
+            if (cartItem is null)
+            {
+                _context.CartItems.Add(new CartItem
                 {
                     CartId = cart.Id,
                     ProductId = dto.ProductId,
                     Quantity = dto.Quantity
-                };
+                });
             }
             else
             {
-                if (cartItem.Quantity + dto.Quantity > 100)
-                {
-                    throw new ArgumentException("تعداد کل محصولات نمیتواند بیشتر از 100 عدد باشد.");
-                }
-
-                cartItem.Quantity += dto.Quantity;
+                cartItem.Quantity = newQuantity;
             }
 
             await _context.SaveChangesAsync();
@@ -134,29 +147,29 @@ namespace BackEnd.Services
 
         public async Task<CartDto?> PatchItemAsync(string userId, int productId, PatchCartItemDto dto)
         {
-            if (dto.Quantity < 1 || dto.Quantity > 100)
+            if (dto.Quantity < 1 || dto.Quantity > MaxItemQuantity)
             {
                 throw new ArgumentException("تعداد محصول باید بین 1 تا 100 عدد باشد");
             }
 
             var cart = await _context.Carts.FirstOrDefaultAsync(c => c.UserId == userId);
-            if(cart is null)
+            if (cart is null)
             {
                 return null;
             }
 
-            await RemoveUnavailableItemsAsync (cart.Id);
+            await RemoveUnavailableItemsAsync(cart.Id);
 
-            var item = await _context.CartItems.FirstOrDefaultAsync(i => i.CartId == cart.Id && i.ProductId == productId);
-            if(item is null)
+            var item = await _context.CartItems.Include(i => i.Product)
+                .FirstOrDefaultAsync(i => i.CartId == cart.Id && i.ProductId == productId);
+            if (item is null)
             {
                 return null;
             }
 
-            var productIsApproved = await _context.Products.AnyAsync(p => p.Id == productId && p.IsApproved && p.SellerId != null && p.SellerId != "");
-            if(!productIsApproved)
+            if (dto.Quantity > item.Product.StockQuantity)
             {
-                throw new InvalidOperationException("این محصول برای خرید در دسترس نیست.");
+                throw new InvalidOperationException("موجودی این محصول کافی نیست");
             }
 
             item.Quantity = dto.Quantity;
@@ -168,14 +181,14 @@ namespace BackEnd.Services
 
         public async Task<CartDto?> RemoveItemAsync(string userId, int productId)
         {
-            var cart = await _context.Carts.FirstAsync(c => c.UserId == userId);
-            if(cart is null)
+            var cart = await _context.Carts.FirstOrDefaultAsync(c => c.UserId == userId);
+            if (cart is null)
             {
                 return null;
             }
 
             var item = await _context.CartItems.FirstOrDefaultAsync(i => i.CartId == cart.Id && i.ProductId == productId);
-            if(item is null)
+            if (item is null)
             {
                 return null;
             }

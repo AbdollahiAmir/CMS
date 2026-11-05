@@ -13,12 +13,41 @@ namespace BackEnd.Services
     public class AuthService : IAuthService
     {
         private readonly UserManager<AppUser> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _config;
 
-        public AuthService(UserManager<AppUser> userManager, IConfiguration config)
+        public AuthService(UserManager<AppUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration config)
         {
             _userManager = userManager;
+            _roleManager = roleManager;
             _config = config;
+        }
+
+        private async Task<IEnumerable<string>> GetPermissionsAsync(IEnumerable<string> roleNames)
+        {
+            if (roleNames.Contains(AppRoles.Admin))
+            {
+                return AppPermissions.All;
+            }
+
+            var permissions = new HashSet<string>();
+
+            foreach (var roleName in roleNames)
+            {
+                var role = await _roleManager.FindByNameAsync(roleName);
+                if (role is null)
+                {
+                    continue;
+                }
+
+                var claims = await _roleManager.GetClaimsAsync(role);
+                foreach (var claim in claims.Where(c => c.Type == AppPermissions.ClaimType))
+                {
+                    permissions.Add(claim.Value);
+                }
+            }
+
+            return permissions;
         }
 
         private async Task<(string Token, DateTime Expires)> GenerateToken(AppUser user)
@@ -34,6 +63,11 @@ namespace BackEnd.Services
             foreach (var role in roles)
             {
                 claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+
+            foreach (var permission in await GetPermissionsAsync(roles))
+            {
+                claims.Add(new Claim(AppPermissions.ClaimType, permission));
             }
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));

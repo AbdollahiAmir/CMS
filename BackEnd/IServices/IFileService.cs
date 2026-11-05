@@ -9,6 +9,12 @@
 
         Task<(Stream Stream, string ContentType)?> OpenProductImageAsync(string? imagePath);
 
+        Task<string> SaveBrandLogoAsync(IFormFile image);
+
+        Task DeleteBrandLogoAsync(string? imagePath);
+
+        Task<(Stream Stream, string ContentType)?> OpenBrandLogoAsync(string? imagePath);
+
         // Product Category
 
         Task<string> SaveCategoryImageAsync(IFormFile image);

@@ -1,8 +1,6 @@
 ﻿using BackEnd.DTOs.Cart;
 using BackEnd.IServices;
-using BackEnd.Services;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 

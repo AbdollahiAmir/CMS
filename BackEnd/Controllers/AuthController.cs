@@ -1,8 +1,10 @@
-﻿using BackEnd.DTOs.Auth;
+﻿using BackEnd.Data;
+using BackEnd.DTOs.Auth;
+using BackEnd.Helpers;
 using BackEnd.IServices;
-using BackEnd.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace BackEnd.Controllers
@@ -12,13 +14,16 @@ namespace BackEnd.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _service;
+        private readonly IConfiguration _config;
 
-        public AuthController(IAuthService service)
+        public AuthController(IAuthService service, IConfiguration config)
         {
             _service = service;
+            _config = config;
         }
 
         [AllowAnonymous]
+        [EnableRateLimiting("auth")]
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterDto dto)
         {
@@ -33,6 +38,7 @@ namespace BackEnd.Controllers
         }
 
         [AllowAnonymous]
+        [EnableRateLimiting("auth")]
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDto dto)
         {
@@ -47,14 +53,7 @@ namespace BackEnd.Controllers
                 return Unauthorized(new { message = "احراز هویت با شکست مواجه شد." });
             }
 
-            Response.Cookies.Append("access_token", result.Token, new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.None,
-                    Path = "/",
-                    Expires = new DateTimeOffset(result.ExpiresAt.Value)
-                });
+            Response.Cookies.Append(AuthCookie.Name, result.Token, AuthCookie.Create(_config, new DateTimeOffset(result.ExpiresAt.Value)));
 
             return Ok(new
             {
@@ -67,13 +66,7 @@ namespace BackEnd.Controllers
         [HttpPost("logout")]
         public IActionResult Logout()
         {
-            Response.Cookies.Delete("access_token", new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.None,
-                    Path = "/"
-                });
+            Response.Cookies.Delete(AuthCookie.Name, AuthCookie.Create(_config, null));
 
             return Ok(new { message = "خروج با موفقیت انجام شد" });
         }
@@ -91,16 +84,19 @@ namespace BackEnd.Controllers
             }
 
             var roles = User.FindAll(ClaimTypes.Role).Select(claim => claim.Value).ToArray();
+            var permissions = User.FindAll(AppPermissions.ClaimType).Select(claim => claim.Value).ToArray();
 
             return Ok(new
             {
                 userId,
                 userName,
-                roles
+                roles,
+                permissions
             });
         }
 
         [Authorize]
+        [EnableRateLimiting("auth")]
         [HttpPost("change-password")]
         public async Task<IActionResult> ChangePassword(ChangePasswordDto dto)
         {

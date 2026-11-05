@@ -1,7 +1,9 @@
 ﻿using BackEnd.Data;
+using BackEnd.DTOs.Common;
+using BackEnd.DTOs.ProductDTOs;
+using BackEnd.Helpers;
 using BackEnd.IServices;
 using BackEnd.IServices.IProductServices;
-using BackEnd.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace BackEnd.Services.ProductServices
@@ -16,36 +18,32 @@ namespace BackEnd.Services.ProductServices
             _context = context;
             _fileService = fileService;
         }
-        public async Task<List<Product>> GetApprovedProductsAsync()
+
+        public async Task<PagedResult<PublicProductDto>> GetProductsAsync(ProductQueryDto query)
         {
-            return await _context.Products.Where(p => p.IsApproved).Select(p => new Product
-            {
-                Id = p.Id,
-                Name = p.Name,
-                Price = p.Price,
-                ImgPath = p.ImgPath,
-                CategoryId = p.CategoryId,
-                Category = p.Category == null ? null : new ProductCategory
-                        {
-                            Id = p.Category.Id,
-                            Name = p.Category.Name
-                        }
-            }).ToListAsync();
+            var categoryIds = await ProductQueryHelper.ResolveCategoryIdsAsync(_context, query.CategoryId, true);
+
+            var products = ProductQueryHelper.ApplyFilters(_context.Products.AsNoTracking().Where(p => p.IsActive), query, categoryIds);
+
+            return await ProductQueryHelper.ToPagedAsync(products.OrderByDescending(p => p.CreatedAt), query, ProductQueryHelper.PublicProjection);
         }
 
-        public async Task<(Stream Stream, string ContentType)?> GetApprovedProductImageAsync(int id)
+        public async Task<PublicProductDto?> GetBySlugAsync(string slug)
         {
-            var product = await _context.Products.Where(p => p.Id == id && p.IsApproved).Select(p=> new Product
-            {
-                Id = p.Id,
-                ImgPath= p.ImgPath,
-            }).FirstOrDefaultAsync();
-            if(product is null)
-            {
-                return null;
-            }
+            return await _context.Products.AsNoTracking()
+                .Where(p => p.IsActive && p.Slug == slug)
+                .Select(ProductQueryHelper.PublicProjection)
+                .FirstOrDefaultAsync();
+        }
 
-            return await _fileService.OpenProductImageAsync(product.ImgPath);
+        public async Task<(Stream Stream, string ContentType)?> GetProductImageAsync(int id)
+        {
+            var imgPath = await _context.Products.AsNoTracking()
+                .Where(p => p.Id == id && p.IsActive)
+                .Select(p => p.ImgPath)
+                .FirstOrDefaultAsync();
+
+            return await _fileService.OpenProductImageAsync(imgPath);
         }
     }
 }

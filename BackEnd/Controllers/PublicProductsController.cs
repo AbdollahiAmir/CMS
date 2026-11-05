@@ -1,11 +1,13 @@
-﻿using BackEnd.IServices.IProductServices;
-using Microsoft.AspNetCore.Http;
+﻿using BackEnd.DTOs.ProductDTOs;
+using BackEnd.IServices.IProductServices;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BackEnd.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [AllowAnonymous]
     public class PublicProductsController : ControllerBase
     {
         private readonly IPublicProductService _service;
@@ -16,18 +18,29 @@ namespace BackEnd.Controllers
         }
 
         [HttpGet("products")]
-        public async Task<IActionResult> GetPublicProducts()
+        public async Task<IActionResult> GetPublicProducts([FromQuery] ProductQueryDto query)
         {
-            var products = await _service.GetApprovedProductsAsync();
-
-            return Ok(products);
+            return Ok(await _service.GetProductsAsync(query));
         }
 
-        [HttpGet("products/{id}/image")]
+        [HttpGet("products/{slug}")]
+        public async Task<IActionResult> GetPublicProductBySlug(string slug)
+        {
+            var product = await _service.GetBySlugAsync(slug);
+            if (product is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(product);
+        }
+
+        [HttpGet("products/{id:int}/image")]
+        [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
         public async Task<IActionResult> GetPublicProductImage(int id)
         {
-            var image = await _service.GetApprovedProductImageAsync(id);
-            if(image is null)
+            var image = await _service.GetProductImageAsync(id);
+            if (image is null)
             {
                 return NotFound();
             }

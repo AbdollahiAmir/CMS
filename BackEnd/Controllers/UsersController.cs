@@ -1,15 +1,15 @@
-﻿using BackEnd.DTOs.Users;
+﻿using BackEnd.Authorization;
+using BackEnd.Data;
+using BackEnd.DTOs.Users;
 using BackEnd.IServices;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace BackEnd.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = AppPermissions.UsersManage)]
     public class UsersController : ControllerBase
     {
         private readonly IUsersService _service;
@@ -17,6 +17,21 @@ namespace BackEnd.Controllers
         public UsersController(IUsersService service)
         {
             _service = service;
+        }
+
+        private IActionResult ToErrorResponse(UserResult result)
+        {
+            if (result.NotFound)
+            {
+                return NotFound(new { errors = result.Errors });
+            }
+
+            if (result.Forbidden)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new { errors = result.Errors });
+            }
+
+            return BadRequest(new { errors = result.Errors });
         }
 
         [HttpGet]
@@ -41,14 +56,10 @@ namespace BackEnd.Controllers
         [HttpPatch("{id}")]
         public async Task<IActionResult> EditUser(string id, EditUserDto dto)
         {
-            var result = await _service.EditAsync(id, dto);
+            var result = await _service.EditAsync(id, dto, Actor.From(User));
             if (!result.Succeeded)
             {
-                if (result.Errors.Contains("کاربر یافت نشد."))
-                {
-                    return NotFound(new { message = "کاربر یافت نشد" });
-                }
-                return BadRequest(new { errors = result.Errors });
+                return ToErrorResponse(result);
             }
 
             return Ok(new { message = "ویرایش کاربر موفقیت آمیز بود" });
@@ -57,17 +68,10 @@ namespace BackEnd.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteUser(string id)
         {
-            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-            var result = await _service.DeleteAsync(id, currentUserId);
+            var result = await _service.DeleteAsync(id, Actor.From(User));
             if (!result.Succeeded)
             {
-                if (result.Errors.Contains("کاربر یافت نشد"))
-                {
-                    return NotFound(new { errors = result.Errors });
-                }
-
-                return BadRequest(new { errors = result.Errors });
+                return ToErrorResponse(result);
             }
 
             return Ok(new { message = "کاربر با موفقیت حذف شد." });

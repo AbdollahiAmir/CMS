@@ -1,5 +1,7 @@
 ﻿using BackEnd.Data;
+using BackEnd.DTOs.Common;
 using BackEnd.DTOs.ProductDTOs;
+using BackEnd.Helpers;
 using BackEnd.IServices;
 using BackEnd.IServices.IProductServices;
 using BackEnd.Models;
@@ -18,58 +20,107 @@ namespace BackEnd.Services.ProductServices
             _fileService = fileService;
         }
 
-        public async Task<List<Product>> GetAllAsync(string userId, bool isAdmin)
+        private static string? Clean(string? value)
         {
-            var query = _context.Products.AsQueryable();
-
-            if (!isAdmin)
-            {
-                query = query.Where(p => p.SellerId == userId);
-            }
-
-            return await query.Select(p => new Product
-            {
-                Id = p.Id,
-                Name = p.Name,
-                Price = p.Price,
-                ImgPath = p.ImgPath,
-                SellerId = p.SellerId,
-                IsApproved = p.IsApproved,
-                CategoryId = p.CategoryId,
-                Category = p.Category == null ? null : new ProductCategory { Id = p.Category.Id, Name = p.Category.Name, },
-                SellerUserName = isAdmin && (p.SellerUserName != null) ? p.SellerUserName : null
-            }).ToListAsync();
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
 
-        public async Task<Product?> GetByIdAsync(int id, string userId, bool isAdmin)
+        private static void ValidatePricing(decimal price, decimal? salePrice)
         {
-            var query = _context.Products.Include(p => p.Category).Where(p => p.Id == id);
-            if (!isAdmin)
+            if (salePrice.HasValue && salePrice.Value >= price)
             {
-                query = query.Where(p => p.SellerId == userId);
+                throw new ArgumentException("قیمت با تخفیف باید کمتر از قیمت اصلی باشد");
             }
-
-            return await query.FirstOrDefaultAsync();
         }
 
-        public async Task<Product> CreateAsync(CreateProductDto dto, string userId, bool isAdmin)
+        private async Task<List<ProductCategory>> LoadCategoriesAsync(IEnumerable<int> categoryIds)
         {
-            var categoryExists = await _context.ProductCategories.AnyAsync(c => c.Id == dto.CategoryId);
-            if(!categoryExists)
+            var ids = categoryIds.Distinct().ToList();
+            if (ids.Count == 0)
             {
-                throw new ArgumentException("دسته بندی وجود ندارد");
+                return new List<ProductCategory>();
+            }
+
+            var categories = await _context.ProductCategories.Where(c => ids.Contains(c.Id)).ToListAsync();
+            if (categories.Count != ids.Count)
+            {
+                throw new ArgumentException("دسته بندی نامعتبر");
+            }
+
+            return categories;
+        }
+
+        private async Task EnsureBrandExistsAsync(int brandId)
+        {
+            if (!await _context.Brands.AnyAsync(b => b.Id == brandId))
+            {
+                throw new ArgumentException("برند وجود ندارد");
+            }
+        }
+
+        public async Task<PagedResult<ProductDto>> GetAllAsync(ProductQueryDto query)
+        {
+            var categoryIds = await ProductQueryHelper.ResolveCategoryIdsAsync(_context, query.CategoryId, false);
+
+            var products = ProductQueryHelper.ApplyFilters(_context.Products.AsNoTracking(), query, categoryIds);
+
+            if (query.IsActive.HasValue)
+            {
+                products = products.Where(p => p.IsActive == query.IsActive.Value);
+            }
+
+            return await ProductQueryHelper.ToPagedAsync(products.OrderByDescending(p => p.Id), query, ProductQueryHelper.AdminProjection);
+        }
+
+        public async Task<ProductDto?> GetByIdAsync(int id)
+        {
+            return await _context.Products.AsNoTracking()
+                .Where(p => p.Id == id)
+                .Select(ProductQueryHelper.AdminProjection)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<ProductDto> CreateAsync(CreateProductDto dto)
+        {
+            var name = dto.Name.Trim();
+            if (name.Length == 0)
+            {
+                throw new ArgumentException("نام محصول الزامی است");
+            }
+
+            ValidatePricing(dto.Price, dto.SalePrice);
+
+            var categories = await LoadCategoriesAsync(dto.CategoryIds);
+
+            if (dto.BrandId.HasValue)
+            {
+                await EnsureBrandExistsAsync(dto.BrandId.Value);
+            }
+
+            var sku = Clean(dto.Sku);
+            if (sku is not null && await _context.Products.AnyAsync(p => p.Sku == sku))
+            {
+                throw new ArgumentException("این کد محصول (SKU) قبلا استفاده شده است");
             }
 
             var product = new Product
             {
-                Name = dto.Name,
+                Name = name,
+                Slug = await SlugHelper.ResolveAsync(dto.Slug, name, s => _context.Products.AnyAsync(p => p.Slug == s)),
+                Sku = sku,
+                ShortDescription = Clean(dto.ShortDescription),
+                Description = Clean(dto.Description),
+                SeoTitle = Clean(dto.SeoTitle),
+                MetaDescription = Clean(dto.MetaDescription),
                 Price = dto.Price,
-                CategoryId = dto.CategoryId,
-                SellerId = userId,
-                IsApproved = isAdmin
+                SalePrice = dto.SalePrice,
+                StockQuantity = dto.StockQuantity,
+                BrandId = dto.BrandId,
+                IsActive = false,
+                Categories = categories
             };
 
-            if(dto.ImgFile is not null && dto.ImgFile.Length > 0)
+            if (dto.ImgFile is { Length: > 0 })
             {
                 product.ImgPath = await _fileService.SaveProductImageAsync(dto.ImgFile);
             }
@@ -86,57 +137,126 @@ namespace BackEnd.Services.ProductServices
                 throw;
             }
 
-            await _context.Entry(product).Reference(p => p.Category).LoadAsync();
-
-            return product;
+            return (await GetByIdAsync(product.Id))!;
         }
 
-        public async Task<Product?> PatchAsync(int id, PatchProductDto dto, string userId, bool isAdmin)
+        public async Task<ProductDto?> PatchAsync(int id, PatchProductDto dto)
         {
-            var product = await GetByIdAsync(id, userId, isAdmin);
-            if(product == null)
+            var product = await _context.Products.Include(p => p.Categories).FirstOrDefaultAsync(p => p.Id == id);
+            if (product is null)
             {
                 return null;
             }
 
-            if(dto.CategoryId.HasValue)
+            if (dto.Name is not null)
             {
-                var categoryExists = await _context.ProductCategories.AnyAsync(c => c.Id == dto.CategoryId.Value);
-                if (!categoryExists)
+                var name = dto.Name.Trim();
+                if (name.Length == 0)
                 {
-                    throw new ArgumentException("دسته بندی وجود ندارد");
+                    throw new ArgumentException("نام محصول نمیتواند خالی باشد");
                 }
 
-                product.CategoryId = dto.CategoryId.Value;
+                product.Name = name;
             }
 
-            if(dto.Name is not null)
+            if (dto.Slug is not null && SlugHelper.Generate(dto.Slug) != product.Slug)
             {
-                product.Name = dto.Name;
+                product.Slug = await SlugHelper.ResolveAsync(dto.Slug, product.Name, s => _context.Products.AnyAsync(p => p.Slug == s && p.Id != id));
             }
 
-            if(dto.Price.HasValue)
+            if (dto.Sku is not null)
+            {
+                var sku = Clean(dto.Sku);
+                if (sku != product.Sku)
+                {
+                    if (sku is not null && await _context.Products.AnyAsync(p => p.Sku == sku && p.Id != id))
+                    {
+                        throw new ArgumentException("این کد محصول (SKU) قبلا استفاده شده است");
+                    }
+
+                    product.Sku = sku;
+                }
+            }
+
+            if (dto.ShortDescription is not null)
+            {
+                product.ShortDescription = Clean(dto.ShortDescription);
+            }
+
+            if (dto.Description is not null)
+            {
+                product.Description = Clean(dto.Description);
+            }
+
+            if (dto.SeoTitle is not null)
+            {
+                product.SeoTitle = Clean(dto.SeoTitle);
+            }
+
+            if (dto.MetaDescription is not null)
+            {
+                product.MetaDescription = Clean(dto.MetaDescription);
+            }
+
+            if (dto.Price.HasValue)
             {
                 product.Price = dto.Price.Value;
+            }
+
+            if (dto.SalePrice.HasValue)
+            {
+                product.SalePrice = dto.SalePrice.Value == 0 ? null : dto.SalePrice.Value;
+            }
+
+            ValidatePricing(product.Price, product.SalePrice);
+
+            if (dto.StockQuantity.HasValue)
+            {
+                product.StockQuantity = dto.StockQuantity.Value;
+            }
+
+            if (dto.BrandId.HasValue)
+            {
+                if (dto.BrandId.Value == 0)
+                {
+                    product.BrandId = null;
+                }
+                else
+                {
+                    await EnsureBrandExistsAsync(dto.BrandId.Value);
+                    product.BrandId = dto.BrandId.Value;
+                }
+            }
+
+            if (dto.CategoryIds is not null)
+            {
+                var categories = await LoadCategoriesAsync(dto.CategoryIds);
+
+                product.Categories.Clear();
+                foreach (var category in categories)
+                {
+                    product.Categories.Add(category);
+                }
+            }
+
+            if (product.IsActive && product.Categories.Count == 0)
+            {
+                throw new ArgumentException("محصول فعال باید حداقل یک دسته بندی داشته باشد");
             }
 
             var oldImagePath = product.ImgPath;
             string? newImagePath = null;
 
-            if (dto.ImgFile is not null && dto.ImgFile.Length > 0)
+            if (dto.ImgFile is { Length: > 0 })
             {
                 newImagePath = await _fileService.SaveProductImageAsync(dto.ImgFile);
-
                 product.ImgPath = newImagePath;
             }
 
+            product.UpdatedAt = DateTime.UtcNow;
+
             try
             {
-                if(!isAdmin)
-                {
-                    product.IsApproved = false;
-                }
-
                 await _context.SaveChangesAsync();
             }
             catch
@@ -154,12 +274,12 @@ namespace BackEnd.Services.ProductServices
                 await _fileService.DeleteProductImageAsync(oldImagePath);
             }
 
-            return product;
+            return await GetByIdAsync(id);
         }
 
-        public async Task<bool> DeleteAsync(int id, string userId, bool isAdmin)
+        public async Task<bool> DeleteAsync(int id)
         {
-            var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == id && (isAdmin || p.SellerId == userId));
+            var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == id);
             if (product is null)
             {
                 return false;
@@ -169,70 +289,57 @@ namespace BackEnd.Services.ProductServices
 
             await using var transaction = await _context.Database.BeginTransactionAsync();
 
-            var now = DateTime.UtcNow;
-
             var cartItems = await _context.CartItems.Where(i => i.ProductId == id).ToListAsync();
 
             _context.CartItems.RemoveRange(cartItems);
-            _context.Products.RemoveRange(product);
+            _context.Products.Remove(product);
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
+
             await _fileService.DeleteProductImageAsync(imagePath);
 
             return true;
         }
 
-        public async Task<Product?> SetApprovalAsync(int id, bool isApproved)
+        public async Task<ProductDto?> SetActiveAsync(int id, bool isActive)
         {
             await using var transaction = await _context.Database.BeginTransactionAsync();
 
-            var product = await _context.Products.Include(p => p.Category).FirstOrDefaultAsync(p => p.Id == id);
-
-            if(product == null)
+            var product = await _context.Products.Include(p => p.Categories).FirstOrDefaultAsync(p => p.Id == id);
+            if (product is null)
             {
                 return null;
             }
 
-            if(isApproved)
+            if (isActive && product.Categories.Count == 0)
             {
-                if (product.CategoryId is null || product.Category is null)
-                {
-                    throw new ArgumentException("برای تأیید محصول، ابتدا باید دسته‌بندی آن را انتخاب کنید.");
-                }
-
-                if (string.IsNullOrWhiteSpace(product.SellerId))
-                {
-                    throw new ArgumentException("محصول فروشنده ندارد و قابل تأیید نیست.");
-                }
+                throw new ArgumentException("برای فعال‌سازی محصول، ابتدا باید حداقل یک دسته بندی برایش انتخاب کنید");
             }
 
-            product.IsApproved = isApproved;
+            product.IsActive = isActive;
+            product.UpdatedAt = DateTime.UtcNow;
 
-            if (!isApproved)
+            if (!isActive)
             {
                 var cartItems = await _context.CartItems.Where(i => i.ProductId == id).ToListAsync();
-
                 _context.CartItems.RemoveRange(cartItems);
-
-                var now = DateTime.UtcNow;
             }
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            return product;
+            return await GetByIdAsync(id);
         }
 
-        public async Task<(Stream Stream, string ContentType)?> GetProductImageAsync(int id, string userId, bool isAdmin)
+        public async Task<(Stream Stream, string ContentType)?> GetProductImageAsync(int id)
         {
-            var product = await GetByIdAsync(id, userId, isAdmin);
-            if(product is null)
-            {
-                return null;
-            }
+            var imgPath = await _context.Products.AsNoTracking()
+                .Where(p => p.Id == id)
+                .Select(p => p.ImgPath)
+                .FirstOrDefaultAsync();
 
-            return await _fileService.OpenProductImageAsync(product.ImgPath);
+            return await _fileService.OpenProductImageAsync(imgPath);
         }
     }
 }
