@@ -10,6 +10,7 @@ namespace BackEnd.IServices
         Task<PostDto> CreateAsync(CreatePostDto dto, string? userId);
         Task<PostDto?> PatchAsync(int id, PatchPostDto dto, string? userId);
         Task<PostDto?> SetPublicationAsync(int id, bool isPublished, string? userId, string? rowVersion);
+        Task<PostDto?> SetScheduleAsync(int id, DateTimeOffset? scheduledAt, string? userId, string? rowVersion);
         Task<bool> SaveFeaturedImageAsync(int id, IFormFile image, string? userId, string? rowVersion);
         Task<bool> DeleteFeaturedImageAsync(int id, string? userId, string? rowVersion);
         Task<(Stream Stream, string ContentType)?> GetFeaturedImageAsync(int id, bool thumbnail = false);

@@ -37,6 +37,7 @@ namespace BackEnd.Services
                 MetaDescription = page.MetaDescription,
                 IsPublished = page.IsPublished,
                 PublishedAt = page.PublishedAt,
+                ScheduledAt = page.ScheduledAt,
                 CreatedByUserId = page.CreatedByUserId,
                 UpdatedByUserId = page.UpdatedByUserId,
                 CreatedAt = page.CreatedAt,
@@ -74,6 +75,7 @@ namespace BackEnd.Services
                     Excerpt = p.Excerpt,
                     IsPublished = p.IsPublished,
                     PublishedAt = p.PublishedAt,
+                    ScheduledAt = p.ScheduledAt,
                     CreatedAt = p.CreatedAt,
                     UpdatedAt = p.UpdatedAt,
                     CreatedByUserId = p.CreatedByUserId,
@@ -198,7 +200,53 @@ namespace BackEnd.Services
             }
 
             contentPage.IsPublished = isPublished;
+            contentPage.ScheduledAt = null;
             contentPage.PublishedAt = isPublished ? contentPage.PublishedAt ?? DateTime.UtcNow : null;
+            contentPage.UpdatedByUserId = userId;
+            contentPage.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return Map(contentPage);
+        }
+
+        public async Task<ContentPageDto?> SetScheduleAsync(int id, DateTimeOffset? scheduledAt, string? userId, string? rowVersion)
+        {
+            var contentPage = await _context.ContentPages.FirstOrDefaultAsync(p => p.Id == id);
+
+            if (contentPage is null)
+            {
+                return null;
+            }
+
+            RowVersionHelper.SetOriginalValue(_context, contentPage, rowVersion);
+
+            if (scheduledAt.HasValue)
+            {
+                if (contentPage.IsPublished)
+                {
+                    throw new ArgumentException("این صفحه منتشر شده است، برای زمان‌بندی ابتدا انتشار آن را لغو کنید");
+                }
+
+                if (string.IsNullOrWhiteSpace(contentPage.Content))
+                {
+                    throw new ArgumentException("برای زمان‌بندی انتشار صفحه ابتدا باید محتوای آن را وارد کنید");
+                }
+
+                var scheduledUtc = scheduledAt.Value.UtcDateTime;
+
+                if (scheduledUtc <= DateTime.UtcNow)
+                {
+                    throw new ArgumentException("زمان انتشار باید در آینده باشد");
+                }
+
+                contentPage.ScheduledAt = scheduledUtc;
+            }
+            else
+            {
+                contentPage.ScheduledAt = null;
+            }
+
             contentPage.UpdatedByUserId = userId;
             contentPage.UpdatedAt = DateTime.UtcNow;
 

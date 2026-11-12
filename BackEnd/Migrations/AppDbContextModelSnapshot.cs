@@ -207,6 +207,9 @@ namespace API.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<DateTime?>("ScheduledAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("SeoTitle")
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
@@ -437,6 +440,9 @@ namespace API.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("ScheduledAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("SeoTitle")
                         .HasMaxLength(250)

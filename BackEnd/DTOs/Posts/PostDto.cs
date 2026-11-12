@@ -12,6 +12,7 @@
         public string? MetaDescription { get; set; }
         public bool IsPublished { get; set; }
         public DateTime? PublishedAt { get; set; }
+        public DateTime? ScheduledAt { get; set; }
         public int? CategoryId { get; set; }
         public string? CategoryName { get; set; }
         public List<TagSummaryDto> Tags { get; set; } = [];

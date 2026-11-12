@@ -45,6 +45,7 @@ namespace BackEnd.Services
                 MetaDescription = post.MetaDescription,
                 IsPublished = post.IsPublished,
                 PublishedAt = post.PublishedAt,
+                ScheduledAt = post.ScheduledAt,
                 CategoryId = post.CategoryId,
                 CategoryName = post.Category?.Name,
                 Tags = post.Tags.Select(tag => new TagSummaryDto
@@ -159,6 +160,7 @@ namespace BackEnd.Services
                     Excerpt = p.Excerpt,
                     IsPublished = p.IsPublished,
                     PublishedAt = p.PublishedAt,
+                    ScheduledAt = p.ScheduledAt,
                     CreatedAt = p.CreatedAt,
                     UpdatedAt = p.UpdatedAt,
                     CategoryId = p.CategoryId,
@@ -344,9 +346,67 @@ namespace BackEnd.Services
             }
 
             post.IsPublished = isPublished;
+            post.ScheduledAt = null;
             post.PublishedAt = isPublished
                 ? post.PublishedAt ?? DateTime.UtcNow
                 : null;
+
+            post.UpdatedByUserId = userId;
+            post.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return Map(post);
+        }
+
+        public async Task<PostDto?> SetScheduleAsync(
+            int id,
+            DateTimeOffset? scheduledAt,
+            string? userId,
+            string? rowVersion)
+        {
+            var post = await _context.Posts
+                .Include(p => p.Category)
+                .Include(p => p.Tags)
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            if (post is null)
+            {
+                return null;
+            }
+
+            RowVersionHelper.SetOriginalValue(
+                _context,
+                post,
+                rowVersion);
+
+            if (scheduledAt.HasValue)
+            {
+                if (post.IsPublished)
+                {
+                    throw new ArgumentException(
+                        "این مقاله منتشر شده است، برای زمان‌بندی ابتدا انتشار آن را لغو کنید");
+                }
+
+                if (string.IsNullOrWhiteSpace(post.Content))
+                {
+                    throw new ArgumentException(
+                        "برای زمان‌بندی انتشار مقاله ابتدا باید محتوای آن را وارد کنید");
+                }
+
+                var scheduledUtc = scheduledAt.Value.UtcDateTime;
+
+                if (scheduledUtc <= DateTime.UtcNow)
+                {
+                    throw new ArgumentException("زمان انتشار باید در آینده باشد");
+                }
+
+                post.ScheduledAt = scheduledUtc;
+            }
+            else
+            {
+                post.ScheduledAt = null;
+            }
 
             post.UpdatedByUserId = userId;
             post.UpdatedAt = DateTime.UtcNow;

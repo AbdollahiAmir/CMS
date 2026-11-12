@@ -14,10 +14,12 @@ namespace BackEnd.Controllers
     public class PostsController : ControllerBase
     {
         private readonly IPostService _service;
+        private readonly IPublicContentService _publicContent;
 
-        public PostsController(IPostService service)
+        public PostsController(IPostService service, IPublicContentService publicContent)
         {
             _service = service;
+            _publicContent = publicContent;
         }
 
         private string? CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -93,6 +95,42 @@ namespace BackEnd.Controllers
             }
 
             SetETag(post.RowVersion);
+
+            return Ok(post);
+        }
+
+        [HttpPatch("{id:int}/schedule")]
+        [Authorize(Policy = AppPermissions.PostsPublish)]
+        public async Task<IActionResult> SetSchedule(int id, [FromBody] SchedulePostDto dto)
+        {
+            var post = await _service.SetScheduleAsync(
+                id,
+                dto.ScheduledAt,
+                CurrentUserId,
+                dto.RowVersion);
+
+            if (post is null)
+            {
+                return NotFound();
+            }
+
+            SetETag(post.RowVersion);
+
+            return Ok(post);
+        }
+
+        [HttpGet("{id:int}/preview")]
+        [Authorize(Policy = AppPermissions.PostsView)]
+        public async Task<IActionResult> Preview(int id)
+        {
+            var post = await _publicContent.GetPostPreviewAsync(id);
+
+            if (post is null)
+            {
+                return NotFound();
+            }
+
+            Response.Headers.CacheControl = "no-store";
 
             return Ok(post);
         }

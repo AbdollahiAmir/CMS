@@ -14,6 +14,10 @@ namespace BackEnd.IServices
 
         Task<PublicPostDto?> GetPostBySlugAsync(string slug);
 
+        Task<PublicPostDto?> GetPostPreviewAsync(int id);
+
+        Task<PublicPageDto?> GetPagePreviewAsync(int id);
+
         Task<List<PublicCategoryDto>> GetCategoriesAsync();
 
         Task<List<PublicTagDto>> GetTagsAsync();

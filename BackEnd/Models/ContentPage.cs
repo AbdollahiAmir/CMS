@@ -28,6 +28,8 @@ namespace BackEnd.Models
 
         public DateTime? PublishedAt { get; set; }
 
+        public DateTime? ScheduledAt { get; set; }
+
         public string? CreatedByUserId { get; set; }
 
         public string? UpdatedByUserId { get; set; }

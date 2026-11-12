@@ -14,10 +14,12 @@ namespace BackEnd.Controllers
     public class ContentPagesController : ControllerBase
     {
         private readonly IContentPageService _service;
+        private readonly IPublicContentService _publicContent;
 
-        public ContentPagesController(IContentPageService service)
+        public ContentPagesController(IContentPageService service, IPublicContentService publicContent)
         {
             _service = service;
+            _publicContent = publicContent;
         }
 
         private string? CurrentUserId =>
@@ -98,6 +100,44 @@ namespace BackEnd.Controllers
             }
 
             SetETag(page.RowVersion);
+
+            return Ok(page);
+        }
+
+        [HttpPatch("{id:int}/schedule")]
+        [Authorize(Policy = AppPermissions.PagesPublish)]
+        public async Task<IActionResult> SetSchedule(
+            int id,
+            [FromBody] SchedulePageDto dto)
+        {
+            var page = await _service.SetScheduleAsync(
+                id,
+                dto.ScheduledAt,
+                CurrentUserId,
+                dto.RowVersion);
+
+            if (page is null)
+            {
+                return NotFound();
+            }
+
+            SetETag(page.RowVersion);
+
+            return Ok(page);
+        }
+
+        [HttpGet("{id:int}/preview")]
+        [Authorize(Policy = AppPermissions.PagesView)]
+        public async Task<IActionResult> Preview(int id)
+        {
+            var page = await _publicContent.GetPagePreviewAsync(id);
+
+            if (page is null)
+            {
+                return NotFound();
+            }
+
+            Response.Headers.CacheControl = "no-store";
 
             return Ok(page);
         }

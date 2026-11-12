@@ -11,6 +11,7 @@
         public string? MetaDescription { get; set; }
         public bool IsPublished { get; set; }
         public DateTime? PublishedAt { get; set; }
+        public DateTime? ScheduledAt { get; set; }
         public string? CreatedByUserId { get; set; }
         public string? UpdatedByUserId { get; set; }
         public DateTime CreatedAt { get; set; }

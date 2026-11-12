@@ -228,6 +228,37 @@ namespace BackEnd.Services
                 .ToListAsync();
         }
 
+        public async Task<PublicPostDto?> GetPostPreviewAsync(int id)
+        {
+            var post = await _context.Posts
+                .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.Tags)
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            if (post is null)
+            {
+                return null;
+            }
+
+            var dto = MapPost(post);
+
+            dto.FeaturedImageUrl = string.IsNullOrWhiteSpace(post.FeaturedImagePath)
+                ? null
+                : $"/api/Posts/{post.Id}/featured-image";
+
+            return dto;
+        }
+
+        public async Task<PublicPageDto?> GetPagePreviewAsync(int id)
+        {
+            var page = await _context.ContentPages
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            return page is null ? null : MapPage(page);
+        }
+
         public async Task<(Stream Stream, string ContentType)?> GetPostFeaturedImageAsync(
             string slug,
             bool thumbnail = false)

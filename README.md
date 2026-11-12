@@ -78,3 +78,42 @@ dotnet ef migrations add VerifyModel --project BackEnd
 ```bash
 dotnet ef database update --project BackEnd
 ```
+
+## انتشار زمان‌بندی‌شده
+
+برای پست و صفحه می‌توان زمان انتشار آینده تعیین کرد.
+
+| متد و مسیر | مجوز | بدنه |
+| --- | --- | --- |
+| `PATCH /api/Posts/{id}/schedule` | `Posts.Publish` | `{ "scheduledAt": "2026-12-01T10:00:00+03:30", "rowVersion": "..." }` |
+| `PATCH /api/ContentPages/{id}/schedule` | `Pages.Publish` | همان ساختار |
+
+- `scheduledAt` را با offset یا `Z` بفرستید. مقدار `null` زمان‌بندی را لغو می‌کند.
+- زمان باید در آینده باشد، محتوا خالی نباشد و مورد قبلاً منتشر نشده باشد.
+- یک سرویس پس‌زمینه هر دقیقه موارد سررسیدشده را منتشر می‌کند، `PublishedAt` را برابر زمان تعیین‌شده می‌گذارد و کش عمومی را پاک می‌کند.
+- انتشار یا لغو انتشار دستی، زمان‌بندی را پاک می‌کند.
+- فیلد `scheduledAt` در پاسخ لیست و جزئیات پست و صفحه موجود است و به‌صورت UTC ذخیره می‌شود.
+
+## پیش‌نمایش پیش‌نویس
+
+| متد و مسیر | مجوز |
+| --- | --- |
+| `GET /api/Posts/{id}/preview` | `Posts.View` |
+| `GET /api/ContentPages/{id}/preview` | `Pages.View` |
+
+خروجی همان ساختار endpoint عمومی را دارد، ولی برای محتوای منتشرنشده هم کار می‌کند و کش نمی‌شود. تصویر شاخص پیش‌نمایش پست از endpoint ادمین سرو می‌شود و به کوکی ورود نیاز دارد.
+
+## سئو
+
+`GET /sitemap.xml` و `GET /rss.xml` عمومی هستند و مثل بقیه‌ی خروجی‌های عمومی ۳۰ ثانیه کش می‌شوند. اگر `Site:BaseUrl` تنظیم نشده باشد، پاسخ ۴۰۴ است.
+
+| کلید | توضیح |
+| --- | --- |
+| `Site:BaseUrl` | آدرس سایت عمومی (فرانت‌اند)، مثلاً `https://example.com` |
+| `Site:Title` و `Site:Description` | عنوان و توضیح فید RSS |
+| `Site:Language` | زبان فید، پیش‌فرض `fa` |
+| `Site:PostPathTemplate` | مسیر پست در فرانت‌اند، پیش‌فرض `/blog/{slug}` |
+| `Site:PagePathTemplate` | مسیر صفحه، پیش‌فرض `/pages/{slug}` |
+| `Site:ProductPathTemplate` | مسیر محصول، پیش‌فرض `/products/{slug}` |
+
+نقشه‌ی سایت شامل صفحه‌ی اصلی، پست‌ها و صفحات منتشرشده و محصولات فعال است و حداکثر ۵۰٬۰۰۰ آدرس دارد. موتورهای جست‌وجو انتظار دارند فایل روی همان دامنه‌ی آدرس‌ها باشد، پس فرانت‌اند یا reverse proxy باید این دو مسیر را به بک‌اند هدایت کند و در `robots.txt` خط `Sitemap: https://example.com/sitemap.xml` قرار گیرد.

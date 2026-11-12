@@ -30,6 +30,8 @@ namespace BackEnd.Models
 
         public DateTime? PublishedAt { get; set; }
 
+        public DateTime? ScheduledAt { get; set; }
+
         public int? CategoryId { get; set; }
 
         public PostCategory? Category { get; set; }
