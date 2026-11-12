@@ -49,3 +49,32 @@ dotnet ef database update --project BackEnd
 ## کش عمومی
 
 خروجی endpoint های عمومی ۳۰ ثانیه کش می‌شود. هر عملیات موفق ایجاد، ویرایش، حذف، انتشار یا فعال‌سازی روی پست، صفحه، دسته‌بندی، تگ، محصول و برند، کش عمومی را بلافاصله پاک می‌کند.
+
+## کتابخانه‌ی مدیا
+
+تصاویر داخل محتوای مقاله، صفحه و توضیحات محصول از اینجا مدیریت می‌شوند.
+
+| متد و مسیر | مجوز | توضیح |
+| --- | --- | --- |
+| `GET /api/Media` | `Media.View` | لیست صفحه‌بندی‌شده، با `search` روی نام فایل و متن جایگزین |
+| `GET /api/Media/{id}` | `Media.View` | جزئیات یک تصویر |
+| `POST /api/Media` | `Media.Manage` | آپلود با `multipart/form-data` و فیلدهای `image` و `altText` |
+| `PATCH /api/Media/{id}` | `Media.Manage` | ویرایش `altText` |
+| `DELETE /api/Media/{id}` | `Media.Manage` | حذف. اگر آدرس تصویر در پست، صفحه یا توضیحات محصول باشد، با خطای ۴۰۰ رد می‌شود |
+| `GET /api/Media/files/{fileName}` | عمومی | فایل اصلی، یا با `?size=thumb` تصویر کوچک |
+
+آدرس `url` در پاسخ را مستقیم در `<img src>` محتوا قرار دهید. این آدرس نسبی است و از sanitizer عبور می‌کند. هر تصویر آپلودشده عمومی است.
+
+نقش‌های سفارشی موجود، دو مجوز `Media.View` و `Media.Manage` را ندارند و باید از بخش نقش‌ها اضافه شوند. نقش Admin همه‌ی مجوزها را دارد.
+
+جدول `MediaFiles` با migration با نام `AddMediaLibrary` ساخته می‌شود. این migration دستی نوشته شده و فایل Designer ندارد. برای اطمینان بعد از دریافت تغییر این دستور را اجرا کنید و مطمئن شوید migration جدیدی با محتوای خالی ساخته می‌شود:
+
+```bash
+dotnet ef migrations add VerifyModel --project BackEnd
+```
+
+اگر محتوای `Up` خالی بود، آن migration را با `dotnet ef migrations remove --project BackEnd` حذف کنید. سپس migration ها را اعمال کنید:
+
+```bash
+dotnet ef database update --project BackEnd
+```

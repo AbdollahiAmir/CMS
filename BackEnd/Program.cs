@@ -66,6 +66,7 @@ builder.Services.AddScoped<IPostCategoryService, PostCategoryService>();
 builder.Services.AddScoped<ITagService, TagService>();
 builder.Services.AddScoped<IContentPageService, ContentPageService>();
 builder.Services.AddScoped<IPostService, PostService>();
+builder.Services.AddScoped<IMediaService, MediaService>();
 builder.Services.AddScoped<IHtmlContentSanitizer, HtmlContentSanitizer>();
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
@@ -199,6 +200,15 @@ builder.Services.AddRateLimiter(options =>
         _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+
+    options.AddPolicy("upload", context => RateLimitPartition.GetFixedWindowLimiter(
+        ClientKey(context),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0
         }));

@@ -20,6 +20,7 @@ namespace BackEnd.Data
         public DbSet<Post> Posts { get; set; }
         public DbSet<PostCategory> PostCategories { get; set; }
         public DbSet<Tag> Tags { get; set; }
+        public DbSet<MediaFile> MediaFiles { get; set; }
 
         public DbSet<RefreshToken> RefreshTokens { get; set; }
 
@@ -172,6 +173,13 @@ namespace BackEnd.Data
             builder.Entity<Tag>()
                 .HasIndex(t => t.Slug)
                 .IsUnique();
+
+            builder.Entity<MediaFile>()
+                .HasIndex(m => m.StoredName)
+                .IsUnique();
+
+            builder.Entity<MediaFile>()
+                .HasIndex(m => m.CreatedAt);
 
             builder.Entity<RefreshToken>()
                 .HasIndex(t => t.TokenHash)

@@ -19,6 +19,7 @@ namespace BackEnd.Services
         private readonly string _categoriesFolder;
         private readonly string _brandsFolder;
         private readonly string _postsFolder;
+        private readonly string _mediaFolder;
 
         public FileService(IWebHostEnvironment env)
         {
@@ -28,6 +29,7 @@ namespace BackEnd.Services
             _categoriesFolder = Path.Combine(uploadsRoot, "Categories");
             _brandsFolder = Path.Combine(uploadsRoot, "Brands");
             _postsFolder = Path.Combine(uploadsRoot, "Posts");
+            _mediaFolder = Path.Combine(uploadsRoot, "Media");
         }
 
         private static async Task<bool> HasValidSignatureAsync(IFormFile image, string extension)
@@ -396,6 +398,21 @@ namespace BackEnd.Services
         public Task<(Stream Stream, string ContentType)?> OpenPostFeaturedImageAsync(string? imagePath, bool thumbnail = false)
         {
             return OpenImageFromFolderAsync(imagePath, _postsFolder, thumbnail);
+        }
+
+        public Task<string> SaveMediaImageAsync(IFormFile image)
+        {
+            return SaveImageAsync(image, _mediaFolder, "Media");
+        }
+
+        public Task DeleteMediaImageAsync(string? imagePath)
+        {
+            return DeleteImageFromFolderAsync(imagePath, _mediaFolder);
+        }
+
+        public Task<(Stream Stream, string ContentType)?> OpenMediaImageAsync(string? imagePath, bool thumbnail = false)
+        {
+            return OpenImageFromFolderAsync(imagePath, _mediaFolder, thumbnail);
         }
     }
 }

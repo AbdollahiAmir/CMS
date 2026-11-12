@@ -17,5 +17,9 @@
         Task<string> SavePostFeaturedImageAsync(IFormFile image);
         Task DeletePostFeaturedImageAsync(string? imagePath);
         Task<(Stream Stream, string ContentType)?> OpenPostFeaturedImageAsync(string? imagePath, bool thumbnail = false);
+
+        Task<string> SaveMediaImageAsync(IFormFile image);
+        Task DeleteMediaImageAsync(string? imagePath);
+        Task<(Stream Stream, string ContentType)?> OpenMediaImageAsync(string? imagePath, bool thumbnail = false);
     }
 }
