@@ -1,8 +1,10 @@
 ﻿using System.Security.Claims;
 using BackEnd.Data;
 using BackEnd.DTOs.Posts;
+using BackEnd.DTOs.Revisions;
 using BackEnd.Helpers;
 using BackEnd.IServices;
+using BackEnd.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,11 +17,16 @@ namespace BackEnd.Controllers
     {
         private readonly IPostService _service;
         private readonly IPublicContentService _publicContent;
+        private readonly IRevisionService _revisions;
 
-        public PostsController(IPostService service, IPublicContentService publicContent)
+        public PostsController(
+            IPostService service,
+            IPublicContentService publicContent,
+            IRevisionService revisions)
         {
             _service = service;
             _publicContent = publicContent;
+            _revisions = revisions;
         }
 
         private string? CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -106,6 +113,50 @@ namespace BackEnd.Controllers
             var post = await _service.SetScheduleAsync(
                 id,
                 dto.ScheduledAt,
+                CurrentUserId,
+                dto.RowVersion);
+
+            if (post is null)
+            {
+                return NotFound();
+            }
+
+            SetETag(post.RowVersion);
+
+            return Ok(post);
+        }
+
+        [HttpGet("{id:int}/revisions")]
+        [Authorize(Policy = AppPermissions.PostsView)]
+        public async Task<IActionResult> GetRevisions(int id)
+        {
+            return Ok(await _revisions.ListAsync(RevisionTypes.Post, id));
+        }
+
+        [HttpGet("{id:int}/revisions/{revisionId:int}")]
+        [Authorize(Policy = AppPermissions.PostsView)]
+        public async Task<IActionResult> GetRevision(int id, int revisionId)
+        {
+            var revision = await _revisions.GetAsync(RevisionTypes.Post, id, revisionId);
+
+            if (revision is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(revision);
+        }
+
+        [HttpPost("{id:int}/revisions/{revisionId:int}/restore")]
+        [Authorize(Policy = AppPermissions.PostsManage)]
+        public async Task<IActionResult> RestoreRevision(
+            int id,
+            int revisionId,
+            [FromBody] RestoreRevisionDto dto)
+        {
+            var post = await _service.RestoreRevisionAsync(
+                id,
+                revisionId,
                 CurrentUserId,
                 dto.RowVersion);
 

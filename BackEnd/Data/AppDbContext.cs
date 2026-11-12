@@ -24,6 +24,8 @@ namespace BackEnd.Data
         public DbSet<Menu> Menus { get; set; }
         public DbSet<MenuItem> MenuItems { get; set; }
         public DbSet<SiteSetting> SiteSettings { get; set; }
+        public DbSet<ContentRevision> ContentRevisions { get; set; }
+        public DbSet<AuditLog> AuditLogs { get; set; }
 
         public DbSet<RefreshToken> RefreshTokens { get; set; }
 
@@ -199,6 +201,18 @@ namespace BackEnd.Data
                 .WithMany(i => i.Children)
                 .HasForeignKey(i => i.ParentId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<ContentRevision>()
+                .HasIndex(r => new { r.EntityType, r.EntityId, r.CreatedAt });
+
+            builder.Entity<AuditLog>()
+                .HasIndex(l => l.CreatedAt);
+
+            builder.Entity<AuditLog>()
+                .HasIndex(l => l.UserId);
+
+            builder.Entity<AuditLog>()
+                .HasIndex(l => new { l.Controller, l.EntityId });
 
             builder.Entity<RefreshToken>()
                 .HasIndex(t => t.TokenHash)

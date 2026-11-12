@@ -12,11 +12,28 @@ namespace BackEnd.Services
     {
         private readonly AppDbContext _context;
         private readonly IHtmlContentSanitizer _htmlSanitizer;
+        private readonly IRevisionService _revisions;
 
-        public ContentPageService(AppDbContext context, IHtmlContentSanitizer htmlSanitizer)
+        public ContentPageService(AppDbContext context, IHtmlContentSanitizer htmlSanitizer, IRevisionService revisions)
         {
             _context = context;
             _htmlSanitizer = htmlSanitizer;
+            _revisions = revisions;
+        }
+
+        private void Record(ContentPage page, string action, string? userId)
+        {
+            _revisions.Add(
+                RevisionTypes.Page,
+                page.Id,
+                page.Title,
+                page.Slug,
+                page.Excerpt,
+                page.Content,
+                page.SeoTitle,
+                page.MetaDescription,
+                action,
+                userId);
         }
 
         private static string? Clean(string? value)
@@ -124,6 +141,9 @@ namespace BackEnd.Services
             _context.ContentPages.Add(contentPage);
             await _context.SaveChangesAsync();
 
+            Record(contentPage, RevisionActions.Create, userId);
+            await _context.SaveChangesAsync();
+
             return Map(contentPage);
         }
 
@@ -137,6 +157,8 @@ namespace BackEnd.Services
             }
 
             RowVersionHelper.SetOriginalValue(_context, contentPage, dto.RowVersion);
+
+            var before = (contentPage.Title, contentPage.Slug, contentPage.Content, contentPage.Excerpt, contentPage.SeoTitle, contentPage.MetaDescription);
 
             if (dto.Title is not null)
             {
@@ -178,7 +200,53 @@ namespace BackEnd.Services
             contentPage.UpdatedByUserId = userId;
             contentPage.UpdatedAt = DateTime.UtcNow;
 
+            var after = (contentPage.Title, contentPage.Slug, contentPage.Content, contentPage.Excerpt, contentPage.SeoTitle, contentPage.MetaDescription);
+
+            if (before != after)
+            {
+                Record(contentPage, RevisionActions.Update, userId);
+            }
+
             await _context.SaveChangesAsync();
+
+            if (before != after)
+            {
+                await _revisions.PruneAsync(RevisionTypes.Page, contentPage.Id);
+            }
+
+            return Map(contentPage);
+        }
+
+        public async Task<ContentPageDto?> RestoreRevisionAsync(int id, int revisionId, string? userId, string? rowVersion)
+        {
+            var contentPage = await _context.ContentPages.FirstOrDefaultAsync(p => p.Id == id);
+
+            if (contentPage is null)
+            {
+                return null;
+            }
+
+            var revision = await _revisions.GetAsync(RevisionTypes.Page, id, revisionId);
+
+            if (revision is null)
+            {
+                return null;
+            }
+
+            RowVersionHelper.SetOriginalValue(_context, contentPage, rowVersion);
+
+            contentPage.Title = revision.Title;
+            contentPage.Content = _htmlSanitizer.Sanitize(revision.Content);
+            contentPage.Excerpt = revision.Excerpt;
+            contentPage.SeoTitle = revision.SeoTitle;
+            contentPage.MetaDescription = revision.MetaDescription;
+            contentPage.UpdatedByUserId = userId;
+            contentPage.UpdatedAt = DateTime.UtcNow;
+
+            Record(contentPage, RevisionActions.Restore, userId);
+
+            await _context.SaveChangesAsync();
+            await _revisions.PruneAsync(RevisionTypes.Page, id);
 
             return Map(contentPage);
         }
@@ -268,6 +336,8 @@ namespace BackEnd.Services
 
             _context.ContentPages.Remove(contentPage);
             await _context.SaveChangesAsync();
+
+            await _revisions.DeleteAllAsync(RevisionTypes.Page, id);
 
             return true;
         }

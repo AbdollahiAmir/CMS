@@ -41,6 +41,7 @@ builder.Services.AddControllers(options =>
     {
         options.Filters.Add<AppExceptionFilter>();
         options.Filters.Add<PublicCacheEvictionFilter>();
+        options.Filters.Add<AuditLogFilter>();
     })
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -69,6 +70,9 @@ builder.Services.AddScoped<ITagService, TagService>();
 builder.Services.AddScoped<IContentPageService, ContentPageService>();
 builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<IMediaService, MediaService>();
+builder.Services.AddScoped<IRevisionService, RevisionService>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddHostedService<AuditLogCleanupService>();
 builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection("Site"));
 builder.Services.AddScoped<ISeoService, SeoService>();
 builder.Services.AddScoped<IMenuService, MenuService>();

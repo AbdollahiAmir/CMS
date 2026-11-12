@@ -163,3 +163,19 @@ dotnet ef database update --project BackEnd
 فیلدها: `siteName`، `tagline`، `logoUrl`، `faviconUrl`، `defaultSeoTitle`، `defaultMetaDescription`، `contactEmail`، `contactPhone`، `address`، `instagramUrl`، `telegramUrl`، `whatsappUrl`، `linkedinUrl`، `xUrl` و `footerText`. `logoUrl` و `faviconUrl` را می‌توان از `url` کتابخانه‌ی مدیا پر کرد و آن تصویر تا زمانی که در تنظیمات یا منو استفاده شده باشد قابل حذف نیست. فیلدی که ارسال نشود یا خالی باشد پاک می‌شود، پس همیشه مقدار کامل را بفرستید.
 
 مجوزهای `Menus.Manage` و `Settings.Manage` برای نقش‌های سفارشی باید دستی اضافه شوند. نقش Admin همه‌ی مجوزها را دارد. مقدار `Site:Title` در appsettings فقط برای فید RSS استفاده می‌شود و از تنظیمات سایت جدا است.
+
+## تاریخچه‌ی نسخه‌ها
+
+با هر ایجاد، ویرایش (فقط وقتی عنوان، اسلاگ، محتوا، خلاصه یا فیلدهای سئو واقعاً تغییر کرده باشند) و بازگردانی مقاله یا صفحه یک نسخه ذخیره می‌شود. حداکثر ۵۰ نسخه‌ی آخر برای هر مورد نگه داشته می‌شود و با حذف مقاله یا صفحه، نسخه‌هایش هم حذف می‌شوند.
+
+- `GET /api/Posts/{id}/revisions` و `GET /api/ContentPages/{id}/revisions`: فهرست نسخه‌ها (مجوز View)
+- `GET /api/Posts/{id}/revisions/{revisionId}` و معادل آن برای صفحه‌ها: متن کامل نسخه (مجوز View)
+- `POST /api/Posts/{id}/revisions/{revisionId}/restore` و معادل آن برای صفحه‌ها: بازگردانی با بدنه‌ی `{ "rowVersion": "..." }` (مجوز Manage)
+
+بازگردانی عنوان، خلاصه، محتوا و فیلدهای سئو را برمی‌گرداند. اسلاگ، دسته‌بندی، برچسب‌ها و وضعیت انتشار دست‌نخورده می‌مانند و محتوا دوباره پاک‌سازی می‌شود.
+
+## گزارش فعالیت
+
+هر درخواست موفق تغییردهنده (POST، PUT، PATCH، DELETE) از کاربر واردشده‌ی هر کنترلر به‌جز Auth در جدول `AuditLogs` ثبت می‌شود: کاربر، کنترلر، اکشن، متد، مسیر، شناسه‌ی موجودیت، کد وضعیت، آی‌پی و زمان. بدنه‌ی درخواست ذخیره نمی‌شود. شکست در ثبت لاگ باعث خطای درخواست نمی‌شود.
+
+`GET /api/AuditLogs` با مجوز `Audit.View` و فیلترهای `userId`، `controller`، `entityId`، `from`، `to`، `page` و `pageSize` (حداکثر ۲۰۰). لاگ‌های قدیمی‌تر از `Audit:RetentionDays` (پیش‌فرض ۱۸۰ روز، مقدار صفر یعنی بدون حذف) هر ۲۴ ساعت پاک می‌شوند. مجوز `Audit.View` برای نقش‌های سفارشی باید دستی اضافه شود.

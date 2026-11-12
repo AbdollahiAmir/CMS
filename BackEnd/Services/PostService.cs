@@ -13,15 +13,33 @@ namespace BackEnd.Services
         private readonly AppDbContext _context;
         private readonly IFileService _fileService;
         private readonly IHtmlContentSanitizer _htmlSanitizer;
+        private readonly IRevisionService _revisions;
 
         public PostService(
             AppDbContext context,
             IFileService fileService,
-            IHtmlContentSanitizer htmlSanitizer)
+            IHtmlContentSanitizer htmlSanitizer,
+            IRevisionService revisions)
         {
             _context = context;
             _fileService = fileService;
             _htmlSanitizer = htmlSanitizer;
+            _revisions = revisions;
+        }
+
+        private void Record(Post post, string action, string? userId)
+        {
+            _revisions.Add(
+                RevisionTypes.Post,
+                post.Id,
+                post.Title,
+                post.Slug,
+                post.Excerpt,
+                post.Content,
+                post.SeoTitle,
+                post.MetaDescription,
+                action,
+                userId);
         }
 
         private static string? Clean(string? value)
@@ -223,6 +241,9 @@ namespace BackEnd.Services
             _context.Posts.Add(post);
             await _context.SaveChangesAsync();
 
+            Record(post, RevisionActions.Create, userId);
+            await _context.SaveChangesAsync();
+
             return Map(post);
         }
 
@@ -251,6 +272,8 @@ namespace BackEnd.Services
                 throw new ArgumentException(
                     "انتخاب دسته‌بندی و حذف دسته‌بندی نمی‌توانند هم‌زمان انجام شوند");
             }
+
+            var before = (post.Title, post.Slug, post.Content, post.Excerpt, post.SeoTitle, post.MetaDescription);
 
             if (dto.Title is not null)
             {
@@ -312,7 +335,61 @@ namespace BackEnd.Services
             post.UpdatedByUserId = userId;
             post.UpdatedAt = DateTime.UtcNow;
 
+            var after = (post.Title, post.Slug, post.Content, post.Excerpt, post.SeoTitle, post.MetaDescription);
+            var changed = before != after;
+
+            if (changed)
+            {
+                Record(post, RevisionActions.Update, userId);
+            }
+
             await _context.SaveChangesAsync();
+
+            if (changed)
+            {
+                await _revisions.PruneAsync(RevisionTypes.Post, post.Id);
+            }
+
+            return Map(post);
+        }
+
+        public async Task<PostDto?> RestoreRevisionAsync(
+            int id,
+            int revisionId,
+            string? userId,
+            string? rowVersion)
+        {
+            var post = await _context.Posts
+                .Include(p => p.Category)
+                .Include(p => p.Tags)
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            if (post is null)
+            {
+                return null;
+            }
+
+            var revision = await _revisions.GetAsync(RevisionTypes.Post, id, revisionId);
+
+            if (revision is null)
+            {
+                return null;
+            }
+
+            RowVersionHelper.SetOriginalValue(_context, post, rowVersion);
+
+            post.Title = revision.Title;
+            post.Excerpt = revision.Excerpt;
+            post.Content = _htmlSanitizer.Sanitize(revision.Content);
+            post.SeoTitle = revision.SeoTitle;
+            post.MetaDescription = revision.MetaDescription;
+            post.UpdatedByUserId = userId;
+            post.UpdatedAt = DateTime.UtcNow;
+
+            Record(post, RevisionActions.Restore, userId);
+
+            await _context.SaveChangesAsync();
+            await _revisions.PruneAsync(RevisionTypes.Post, id);
 
             return Map(post);
         }
@@ -526,6 +603,8 @@ namespace BackEnd.Services
 
             _context.Posts.Remove(post);
             await _context.SaveChangesAsync();
+
+            await _revisions.DeleteAllAsync(RevisionTypes.Post, id);
 
             if (!string.IsNullOrWhiteSpace(imagePath))
             {
