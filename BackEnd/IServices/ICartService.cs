@@ -11,5 +11,7 @@ namespace BackEnd.IServices
         Task<CartDto?> PatchItemAsync(string userId, int productId, PatchCartItemDto dto);
 
         Task<CartDto?> RemoveItemAsync(string userId, int productId);
+
+        Task<MergeCartResultDto> MergeAsync(string userId, MergeCartDto dto);
     }
 }

@@ -3,6 +3,7 @@ using BackEnd.DTOs.Orders;
 using BackEnd.IServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace BackEnd.Controllers
@@ -52,6 +53,7 @@ namespace BackEnd.Controllers
         }
 
         [HttpPost]
+        [EnableRateLimiting("checkout")]
         public async Task<IActionResult> CreateOrder(CreateOrderDto dto)
         {
             var userId = CurrentUserId;

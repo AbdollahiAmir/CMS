@@ -10,10 +10,13 @@ using BackEnd.Services.ProductServices;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using System.Net;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
@@ -37,20 +40,32 @@ builder.Services.AddControllers(options => options.Filters.Add<AppExceptionFilte
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddDbContextPool<AppDbContext>(options => options.UseSqlServer(
+    builder.Configuration.GetConnectionString("DefaultConnection"),
+    sql => sql.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorNumbersToAdd: null)));
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IFileService, FileService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+builder.Services.AddHostedService<RefreshTokenCleanupService>();
 builder.Services.AddScoped<IIdentitySeeder, IdentitySeeder>();
 builder.Services.AddScoped<IProductCategoryService, ProductCategoryService>();
 builder.Services.AddScoped<IPublicProductService, PublicProductService>();
 builder.Services.AddScoped<IUsersService, UsersService>();
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IRolesService, RolesService>();
+builder.Services.AddScoped<IPublicContentService, PublicContentService>();
 builder.Services.AddScoped<IBrandService, BrandService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IPostCategoryService, PostCategoryService>();
+builder.Services.AddScoped<ITagService, TagService>();
+builder.Services.AddScoped<IContentPageService, ContentPageService>();
+builder.Services.AddScoped<IPostService, PostService>();
+builder.Services.AddScoped<IHtmlContentSanitizer, HtmlContentSanitizer>();
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
+
 
 builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
 {
@@ -122,24 +137,94 @@ builder.Services.AddCors(options =>
             policy.WithOrigins(allowedOrigins)
                 .AllowAnyHeader()
                 .AllowAnyMethod()
-                .AllowCredentials();
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromHours(1));
         }
     });
 });
+
+static string ClientKey(HttpContext context)
+{
+    return context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? context.Connection.RemoteIpAddress?.ToString()
+        ?? "unknown";
+}
 
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    options.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
-        httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        RateLimitPartition.GetSlidingWindowLimiter(ClientKey(context), _ => new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = 300,
+            Window = TimeSpan.FromMinutes(1),
+            SegmentsPerWindow = 6,
+            QueueLimit = 0
+        }));
+
+    options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 10,
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0
         }));
+
+    options.AddPolicy("refresh", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+
+    options.AddPolicy("checkout", context => RateLimitPartition.GetFixedWindowLimiter(
+        ClientKey(context),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+
+    options.AddPolicy("lookup", context => RateLimitPartition.GetFixedWindowLimiter(
+        ClientKey(context),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
 });
+
+builder.Services.AddOutputCache(options =>
+{
+    options.AddPolicy("PublicShort", policy => policy
+        .Expire(TimeSpan.FromSeconds(30))
+        .SetVaryByQuery("*")
+        .SetVaryByHeader("Origin"));
+});
+
+builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
+builder.Services.AddHealthChecks();
+
+var knownProxies = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
+
+if (knownProxies.Length > 0)
+{
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+
+        foreach (var proxy in knownProxies)
+        {
+            options.KnownProxies.Add(IPAddress.Parse(proxy));
+        }
+    });
+}
 
 var app = builder.Build();
 
@@ -156,6 +241,12 @@ using (var scope = app.Services.CreateScope())
     await seeder.SeedAsync();
 }
 
+if (knownProxies.Length > 0)
+{
+    app.UseForwardedHeaders();
+}
+
+app.UseResponseCompression();
 app.UseExceptionHandler();
 
 if (!app.Environment.IsDevelopment())
@@ -175,14 +266,16 @@ app.Use(async (context, next) =>
 });
 
 app.UseCors();
-app.UseRateLimiter();
 app.UseMiddleware<OriginCheckMiddleware>();
 
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
+app.UseOutputCache();
 
 app.UseStaticFiles();
 
 app.MapControllers();
+app.MapHealthChecks("/health").AllowAnonymous();
 
 app.Run();

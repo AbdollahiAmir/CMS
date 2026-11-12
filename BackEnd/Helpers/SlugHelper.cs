@@ -4,6 +4,8 @@ namespace BackEnd.Helpers
 {
     public static class SlugHelper
     {
+
+        // جنریت کردن اسلاگ از متن
         public static string Generate(string value)
         {
             var builder = new StringBuilder();
@@ -47,7 +49,7 @@ namespace BackEnd.Helpers
             var baseSlug = Generate(name);
             if (baseSlug.Length == 0)
             {
-                throw new ArgumentException("از روی این نام نمیتوان اسلاگ ساخت، اسلاگ را وارد کنید");
+                throw new ArgumentException("از روی این نام نمیتوان اسلاگ ساخت، یک اسلاگ وارد کنید");
             }
 
             var slug = baseSlug;

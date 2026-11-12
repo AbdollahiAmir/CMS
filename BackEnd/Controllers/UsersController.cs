@@ -35,9 +35,9 @@ namespace BackEnd.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAllUsers()
+        public async Task<IActionResult> GetAllUsers([FromQuery] UserQueryDto query)
         {
-            var users = await _service.GetAllAsync();
+            var users = await _service.GetAllAsync(query);
             return Ok(users);
         }
 

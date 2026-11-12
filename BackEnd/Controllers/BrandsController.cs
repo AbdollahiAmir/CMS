@@ -1,8 +1,10 @@
-﻿using BackEnd.Data;
+﻿using BackEnd.Helpers;
+using BackEnd.Data;
 using BackEnd.DTOs.Brands;
 using BackEnd.IServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 
 namespace BackEnd.Controllers
 {
@@ -19,6 +21,7 @@ namespace BackEnd.Controllers
 
         [HttpGet]
         [AllowAnonymous]
+        [OutputCache(PolicyName = "PublicShort")]
         public async Task<IActionResult> GetActiveBrands()
         {
             return Ok(await _service.GetAllAsync(false));
@@ -47,9 +50,9 @@ namespace BackEnd.Controllers
         [HttpGet("{id:int}/logo")]
         [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
         [AllowAnonymous]
-        public async Task<IActionResult> GetBrandLogo(int id)
+        public async Task<IActionResult> GetBrandLogo(int id, [FromQuery] string? size)
         {
-            var logo = await _service.GetBrandLogoAsync(id, true);
+            var logo = await _service.GetBrandLogoAsync(id, true, ImageSize.IsThumbnail(size));
             if (logo is null)
             {
                 return NotFound();

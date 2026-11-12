@@ -13,9 +13,15 @@ namespace BackEnd.Data
         public DbSet<Brand> Brands { get; set; }
         public DbSet<Order> Orders { get; set; }
         public DbSet<OrderItem> OrderItems { get; set; }
-
         public DbSet<Cart> Carts { get; set; }
         public DbSet<CartItem> CartItems { get; set; }
+
+        public DbSet<ContentPage> ContentPages { get; set; }
+        public DbSet<Post> Posts { get; set; }
+        public DbSet<PostCategory> PostCategories { get; set; }
+        public DbSet<Tag> Tags { get; set; }
+
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -130,6 +136,61 @@ namespace BackEnd.Data
                 .WithMany()
                 .HasForeignKey(i => i.ProductId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<ContentPage>()
+                .HasIndex(p => p.Slug)
+                .IsUnique();
+
+            builder.Entity<ContentPage>()
+                .HasIndex(p => new { p.IsPublished, p.PublishedAt });
+
+            builder.Entity<Post>()
+                .HasIndex(p => p.Slug)
+                .IsUnique();
+
+            builder.Entity<Post>()
+                .HasIndex(p => new { p.IsPublished, p.PublishedAt });
+
+            builder.Entity<Post>()
+                .HasIndex(p => p.CategoryId);
+
+            builder.Entity<Post>()
+                .HasOne(p => p.Category)
+                .WithMany(c => c.Posts)
+                .HasForeignKey(p => p.CategoryId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<Post>()
+                .HasMany(p => p.Tags)
+                .WithMany(t => t.Posts)
+                .UsingEntity(j => j.ToTable("PostTagLinks"));
+
+            builder.Entity<PostCategory>()
+                .HasIndex(c => c.Slug)
+                .IsUnique();
+
+            builder.Entity<Tag>()
+                .HasIndex(t => t.Slug)
+                .IsUnique();
+
+            builder.Entity<RefreshToken>()
+                .HasIndex(t => t.TokenHash)
+                .IsUnique();
+
+            builder.Entity<RefreshToken>()
+                .HasIndex(t => t.UserId);
+
+            builder.Entity<RefreshToken>()
+                .HasIndex(t => t.FamilyId);
+
+            builder.Entity<RefreshToken>()
+                .HasIndex(t => t.ExpiresAt);
+
+            builder.Entity<RefreshToken>()
+                .HasOne(t => t.User)
+                .WithMany()
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

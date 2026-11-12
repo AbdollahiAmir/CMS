@@ -2,6 +2,7 @@
 using BackEnd.IServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace BackEnd.Controllers
@@ -61,6 +62,19 @@ namespace BackEnd.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        [HttpPost("merge")]
+        [EnableRateLimiting("checkout")]
+        public async Task<IActionResult> Merge(MergeCartDto dto)
+        {
+            var userId = CurrentUserId;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized();
+            }
+
+            return Ok(await _service.MergeAsync(userId, dto));
         }
 
         [HttpPatch("items/{productId:int}")]

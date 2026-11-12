@@ -1,6 +1,7 @@
 ﻿using BackEnd.Data;
 using BackEnd.DTOs.Common;
 using BackEnd.DTOs.Orders;
+using BackEnd.Helpers;
 using BackEnd.IServices;
 using BackEnd.Models;
 using Microsoft.EntityFrameworkCore;
@@ -74,28 +75,13 @@ namespace BackEnd.Services
         {
             while (true)
             {
-                var number = $"ORD-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(100000, 1000000)}";
+                var number = $"ORD-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.NextInt64(100_000_000_000, 1_000_000_000_000)}";
 
                 if (!await _context.Orders.AnyAsync(o => o.OrderNumber == number))
                 {
                     return number;
                 }
             }
-        }
-
-        private static void ApplyCancellation(Order order, string? reason)
-        {
-            foreach (var item in order.Items)
-            {
-                if (item.Product is not null)
-                {
-                    item.Product.StockQuantity += item.Quantity;
-                }
-            }
-
-            order.Status = OrderStatus.Cancelled;
-            order.CancelReason = Clean(reason);
-            order.UpdatedAt = DateTime.UtcNow;
         }
 
         private static async Task<PagedResult<OrderListItemDto>> ToPagedAsync(IQueryable<Order> query, OrderQueryDto q)
@@ -131,9 +117,43 @@ namespace BackEnd.Services
             };
         }
 
+        private async Task CancelAsync(Order order, string? reason)
+        {
+            var expectedStatus = order.Status;
+            var orderId = order.Id;
+            var cleanReason = Clean(reason);
+            var now = DateTime.UtcNow;
+
+            await _context.ExecuteInTransactionAsync(async () =>
+            {
+                var updated = await _context.Orders
+                    .Where(o => o.Id == orderId && o.Status == expectedStatus)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(o => o.Status, OrderStatus.Cancelled)
+                        .SetProperty(o => o.CancelReason, cleanReason)
+                        .SetProperty(o => o.UpdatedAt, now));
+
+                if (updated == 0)
+                {
+                    throw new ArgumentException("وضعیت سفارش هم‌زمان تغییر کرد، دوباره تلاش کنید");
+                }
+
+                foreach (var item in order.Items.Where(i => i.ProductId.HasValue).OrderBy(i => i.ProductId))
+                {
+                    var productId = item.ProductId!.Value;
+                    var quantity = item.Quantity;
+
+                    await _context.Products
+                        .Where(p => p.Id == productId)
+                        .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockQuantity, p => p.StockQuantity + quantity));
+                }
+            });
+        }
+
         public async Task<OrderDto> CreateAsync(string userId, CreateOrderDto dto)
         {
             var cart = await _context.Carts
+                .AsNoTracking()
                 .Include(c => c.Items)
                 .ThenInclude(i => i.Product)
                 .FirstOrDefaultAsync(c => c.UserId == userId);
@@ -155,7 +175,7 @@ namespace BackEnd.Services
                 CustomerNote = Clean(dto.CustomerNote)
             };
 
-            foreach (var cartItem in cart.Items)
+            foreach (var cartItem in cart.Items.OrderBy(i => i.ProductId))
             {
                 var product = cartItem.Product;
 
@@ -164,14 +184,7 @@ namespace BackEnd.Services
                     throw new ArgumentException("یکی از محصولات سبد خرید دیگر در دسترس نیست، سبد خرید را بررسی کنید");
                 }
 
-                if (cartItem.Quantity > product.StockQuantity)
-                {
-                    throw new ArgumentException($"موجودی محصول «{product.Name}» کافی نیست");
-                }
-
                 var unitPrice = product.SalePrice ?? product.Price;
-
-                product.StockQuantity -= cartItem.Quantity;
 
                 order.Items.Add(new OrderItem
                 {
@@ -186,10 +199,38 @@ namespace BackEnd.Services
 
             order.TotalAmount = order.Items.Sum(i => i.LineTotal);
 
-            _context.Orders.Add(order);
-            _context.CartItems.RemoveRange(cart.Items);
+            var cartId = cart.Id;
+            var itemCount = cart.Items.Count;
 
-            await _context.SaveChangesAsync();
+            await _context.ExecuteInTransactionAsync(async () =>
+            {
+                _context.ChangeTracker.Clear();
+
+                foreach (var item in order.Items.OrderBy(i => i.ProductId))
+                {
+                    var productId = item.ProductId!.Value;
+                    var quantity = item.Quantity;
+
+                    var updated = await _context.Products
+                        .Where(p => p.Id == productId && p.IsActive && p.StockQuantity >= quantity)
+                        .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockQuantity, p => p.StockQuantity - quantity));
+
+                    if (updated == 0)
+                    {
+                        throw new ArgumentException($"موجودی محصول «{item.ProductName}» کافی نیست");
+                    }
+                }
+
+                var removed = await _context.CartItems.Where(i => i.CartId == cartId).ExecuteDeleteAsync();
+
+                if (removed != itemCount)
+                {
+                    throw new ArgumentException("سبد خرید هم‌زمان تغییر کرد، سبد را بررسی و دوباره تلاش کنید");
+                }
+
+                _context.Orders.Add(order);
+                await _context.SaveChangesAsync();
+            });
 
             return (await GetMyOrderAsync(userId, order.Id))!;
         }
@@ -210,8 +251,8 @@ namespace BackEnd.Services
         public async Task<OrderDto?> CancelMyOrderAsync(string userId, int id)
         {
             var order = await _context.Orders
+                .AsNoTracking()
                 .Include(o => o.Items)
-                .ThenInclude(i => i.Product)
                 .FirstOrDefaultAsync(o => o.Id == id && o.UserId == userId);
 
             if (order is null)
@@ -224,9 +265,7 @@ namespace BackEnd.Services
                 throw new ArgumentException("فقط سفارش‌های در انتظار تأیید قابل لغو هستند");
             }
 
-            ApplyCancellation(order, "لغو توسط مشتری");
-
-            await _context.SaveChangesAsync();
+            await CancelAsync(order, "لغو توسط مشتری");
 
             return await GetMyOrderAsync(userId, id);
         }
@@ -247,8 +286,8 @@ namespace BackEnd.Services
         public async Task<OrderDto?> UpdateStatusAsync(int id, UpdateOrderStatusDto dto)
         {
             var order = await _context.Orders
+                .AsNoTracking()
                 .Include(o => o.Items)
-                .ThenInclude(i => i.Product)
                 .FirstOrDefaultAsync(o => o.Id == id);
 
             if (order is null)
@@ -265,20 +304,26 @@ namespace BackEnd.Services
 
             if (newStatus == OrderStatus.Cancelled)
             {
-                ApplyCancellation(order, dto.Reason);
+                await CancelAsync(order, dto.Reason);
             }
             else
             {
-                order.Status = newStatus;
-                order.UpdatedAt = DateTime.UtcNow;
+                var expectedStatus = order.Status;
+                var trackingCode = newStatus == OrderStatus.Shipped ? Clean(dto.TrackingCode) : order.TrackingCode;
+                var now = DateTime.UtcNow;
 
-                if (newStatus == OrderStatus.Shipped)
+                var updated = await _context.Orders
+                    .Where(o => o.Id == id && o.Status == expectedStatus)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(o => o.Status, newStatus)
+                        .SetProperty(o => o.TrackingCode, trackingCode)
+                        .SetProperty(o => o.UpdatedAt, now));
+
+                if (updated == 0)
                 {
-                    order.TrackingCode = Clean(dto.TrackingCode);
+                    throw new ArgumentException("وضعیت سفارش هم‌زمان تغییر کرد، دوباره تلاش کنید");
                 }
             }
-
-            await _context.SaveChangesAsync();
 
             return await GetByIdAsync(id);
         }

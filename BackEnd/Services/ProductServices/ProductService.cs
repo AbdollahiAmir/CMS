@@ -74,10 +74,7 @@ namespace BackEnd.Services.ProductServices
 
         public async Task<ProductDto?> GetByIdAsync(int id)
         {
-            return await _context.Products.AsNoTracking()
-                .Where(p => p.Id == id)
-                .Select(ProductQueryHelper.AdminProjection)
-                .FirstOrDefaultAsync();
+            return await _context.Products.AsNoTracking().Where(p => p.Id == id).Select(ProductQueryHelper.AdminProjection).FirstOrDefaultAsync();
         }
 
         public async Task<ProductDto> CreateAsync(CreateProductDto dto)
@@ -287,15 +284,12 @@ namespace BackEnd.Services.ProductServices
 
             var imagePath = product.ImgPath;
 
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-
             var cartItems = await _context.CartItems.Where(i => i.ProductId == id).ToListAsync();
 
             _context.CartItems.RemoveRange(cartItems);
             _context.Products.Remove(product);
 
             await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
 
             await _fileService.DeleteProductImageAsync(imagePath);
 
@@ -304,8 +298,6 @@ namespace BackEnd.Services.ProductServices
 
         public async Task<ProductDto?> SetActiveAsync(int id, bool isActive)
         {
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-
             var product = await _context.Products.Include(p => p.Categories).FirstOrDefaultAsync(p => p.Id == id);
             if (product is null)
             {
@@ -327,19 +319,18 @@ namespace BackEnd.Services.ProductServices
             }
 
             await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
 
             return await GetByIdAsync(id);
         }
 
-        public async Task<(Stream Stream, string ContentType)?> GetProductImageAsync(int id)
+        public async Task<(Stream Stream, string ContentType)?> GetProductImageAsync(int id, bool thumbnail = false)
         {
             var imgPath = await _context.Products.AsNoTracking()
                 .Where(p => p.Id == id)
                 .Select(p => p.ImgPath)
                 .FirstOrDefaultAsync();
 
-            return await _fileService.OpenProductImageAsync(imgPath);
+            return await _fileService.OpenProductImageAsync(imgPath, thumbnail);
         }
     }
 }

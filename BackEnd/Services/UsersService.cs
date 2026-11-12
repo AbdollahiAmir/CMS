@@ -1,5 +1,6 @@
 ﻿using BackEnd.Authorization;
 using BackEnd.Data;
+using BackEnd.DTOs.Common;
 using BackEnd.DTOs.Users;
 using BackEnd.IServices;
 using BackEnd.Models;
@@ -13,12 +14,18 @@ namespace BackEnd.Services
         private readonly UserManager<AppUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly AppDbContext _context;
+        private readonly IRefreshTokenService _refreshTokens;
 
-        public UsersService(UserManager<AppUser> userManager, RoleManager<IdentityRole> roleManager, AppDbContext context)
+        public UsersService(
+            UserManager<AppUser> userManager,
+            RoleManager<IdentityRole> roleManager,
+            AppDbContext context,
+            IRefreshTokenService refreshTokens)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _context = context;
+            _refreshTokens = refreshTokens;
         }
 
         private async Task<bool> ExceedsActorAsync(IEnumerable<string> roleNames, Actor actor)
@@ -53,25 +60,48 @@ namespace BackEnd.Services
             return false;
         }
 
-        public async Task<IReadOnlyList<UserDto>> GetAllAsync()
+        public async Task<PagedResult<UserDto>> GetAllAsync(UserQueryDto query)
         {
-            var users = await _userManager.Users.AsNoTracking()
+            var page = Math.Max(query.Page, 1);
+            var pageSize = Math.Clamp(query.PageSize, 1, 100);
+
+            var usersQuery = _userManager.Users.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(query.Search))
+            {
+                var search = query.Search.Trim();
+                usersQuery = usersQuery.Where(u => u.UserName != null && u.UserName.Contains(search));
+            }
+
+            var total = await usersQuery.CountAsync();
+
+            var users = await usersQuery
                 .OrderBy(u => u.UserName)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .Select(u => new { u.Id, u.UserName })
                 .ToListAsync();
 
-            var roleRows = await (from ur in _context.UserRoles.AsNoTracking()
+            var userIds = users.Select(u => u.Id).ToList();
+
+            var roleRows = await (from ur in _context.UserRoles.AsNoTracking().Where(x => userIds.Contains(x.UserId))
                                   join r in _context.Roles.AsNoTracking() on ur.RoleId equals r.Id
                                   select new { ur.UserId, RoleName = r.Name }).ToListAsync();
 
             var rolesByUser = roleRows.ToLookup(x => x.UserId, x => x.RoleName ?? string.Empty);
 
-            return users.Select(u => new UserDto
+            return new PagedResult<UserDto>
             {
-                Id = u.Id,
-                UserName = u.UserName ?? string.Empty,
-                Roles = rolesByUser[u.Id].ToArray()
-            }).ToList();
+                Items = users.Select(u => new UserDto
+                {
+                    Id = u.Id,
+                    UserName = u.UserName ?? string.Empty,
+                    Roles = rolesByUser[u.Id].ToArray()
+                }).ToList(),
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = total
+            };
         }
 
         public async Task<UserDto?> GetByIdAsync(string id)
@@ -155,6 +185,8 @@ namespace BackEnd.Services
                     return UserResult.Fail(addResult.Errors.Select(e => e.Description));
                 }
             }
+
+            await _refreshTokens.RevokeAllAsync(user.Id);
 
             return UserResult.Ok();
         }

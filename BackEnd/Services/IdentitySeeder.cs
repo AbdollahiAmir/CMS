@@ -20,7 +20,7 @@ namespace BackEnd.Services
 
         public async Task SeedAsync()
         {
-            foreach (var role in new[] { AppRoles.Admin, AppRoles.Customer })
+            foreach (var role in AppRoles.All)
             {
                 if (!await _roleManager.RoleExistsAsync(role))
                 {

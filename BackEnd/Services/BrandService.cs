@@ -151,8 +151,6 @@ namespace BackEnd.Services
 
             var logoPath = brand.LogoPath;
 
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-
             var products = await _context.Products.Where(p => p.BrandId == id).ToListAsync();
             foreach (var product in products)
             {
@@ -162,14 +160,13 @@ namespace BackEnd.Services
             _context.Brands.Remove(brand);
 
             await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
 
             await _fileService.DeleteBrandLogoAsync(logoPath);
 
             return true;
         }
 
-        public async Task<(Stream Stream, string ContentType)?> GetBrandLogoAsync(int id, bool onlyActive)
+        public async Task<(Stream Stream, string ContentType)?> GetBrandLogoAsync(int id, bool onlyActive, bool thumbnail = false)
         {
             var brand = await _context.Brands.AsNoTracking()
                 .FirstOrDefaultAsync(b => b.Id == id && (!onlyActive || b.IsActive));
@@ -178,7 +175,7 @@ namespace BackEnd.Services
                 return null;
             }
 
-            return await _fileService.OpenBrandLogoAsync(brand.LogoPath);
+            return await _fileService.OpenBrandLogoAsync(brand.LogoPath, thumbnail);
         }
     }
 }

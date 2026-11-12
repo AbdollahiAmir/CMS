@@ -255,8 +255,6 @@ namespace BackEnd.Services
 
             var imagePath = category.ImgPath;
 
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-
             var products = await _context.Products
                 .Include(p => p.Categories)
                 .Where(p => p.Categories.Any(c => c.Id == id))
@@ -285,14 +283,13 @@ namespace BackEnd.Services
             _context.ProductCategories.Remove(category);
 
             await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
 
             await _fileService.DeleteCategoryImageAsync(imagePath);
 
             return true;
         }
 
-        public async Task<(Stream Stream, string ContentType)?> GetCategoryImageAsync(int id)
+        public async Task<(Stream Stream, string ContentType)?> GetCategoryImageAsync(int id, bool thumbnail = false)
         {
             var category = await _context.ProductCategories.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == id && c.IsActive);
@@ -301,7 +298,7 @@ namespace BackEnd.Services
                 return null;
             }
 
-            return await _fileService.OpenCategoryImageAsync(category.ImgPath);
+            return await _fileService.OpenCategoryImageAsync(category.ImgPath, thumbnail);
         }
     }
 }

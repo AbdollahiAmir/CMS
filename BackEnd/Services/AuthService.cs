@@ -12,18 +12,31 @@ namespace BackEnd.Services
 {
     public class AuthService : IAuthService
     {
+        private static readonly AppUser TimingDummyUser = new() { UserName = "timing-dummy" };
+
         private readonly UserManager<AppUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _config;
+        private readonly IRefreshTokenService _refreshTokens;
 
-        public AuthService(UserManager<AppUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration config)
+        public AuthService(
+            UserManager<AppUser> userManager,
+            RoleManager<IdentityRole> roleManager,
+            IConfiguration config,
+            IRefreshTokenService refreshTokens)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _config = config;
+            _refreshTokens = refreshTokens;
         }
 
-        private async Task<IEnumerable<string>> GetPermissionsAsync(IEnumerable<string> roleNames)
+        private static AuthResult Fail(params string[] errors)
+        {
+            return new AuthResult { IsSuccess = false, Errors = errors };
+        }
+
+        private async Task<IReadOnlyCollection<string>> GetPermissionsAsync(IEnumerable<string> roleNames)
         {
             if (roleNames.Contains(AppRoles.Admin))
             {
@@ -50,8 +63,11 @@ namespace BackEnd.Services
             return permissions;
         }
 
-        private async Task<(string Token, DateTime Expires)> GenerateToken(AppUser user)
+        private async Task<(string Token, DateTime Expires, AuthUserDto User)> GenerateAccessTokenAsync(AppUser user)
         {
+            var roles = await _userManager.GetRolesAsync(user);
+            var permissions = await GetPermissionsAsync(roles);
+
             var claims = new List<Claim>
             {
                 new(ClaimTypes.NameIdentifier, user.Id),
@@ -59,23 +75,45 @@ namespace BackEnd.Services
                 new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 
-            var roles = await _userManager.GetRolesAsync(user);
-            foreach (var role in roles)
-            {
-                claims.Add(new Claim(ClaimTypes.Role, role));
-            }
-
-            foreach (var permission in await GetPermissionsAsync(roles))
-            {
-                claims.Add(new Claim(AppPermissions.ClaimType, permission));
-            }
+            claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
+            claims.AddRange(permissions.Select(permission => new Claim(AppPermissions.ClaimType, permission)));
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            var expires = DateTime.UtcNow.AddMinutes(double.Parse(_config["Jwt:ExpiryMinutes"]!));
-            var jwt = new JwtSecurityToken(issuer: _config["Jwt:Issuer"], audience: _config["Jwt:Audience"], claims: claims, expires: expires, signingCredentials: credentials);
+            var expires = DateTime.UtcNow.AddMinutes(_config.GetValue("Jwt:ExpiryMinutes", 15d));
 
-            return (new JwtSecurityTokenHandler().WriteToken(jwt), expires);
+            var jwt = new JwtSecurityToken(
+                issuer: _config["Jwt:Issuer"],
+                audience: _config["Jwt:Audience"],
+                claims: claims,
+                expires: expires,
+                signingCredentials: credentials);
+
+            var profile = new AuthUserDto
+            {
+                UserId = user.Id,
+                UserName = user.UserName!,
+                Roles = roles.ToArray(),
+                Permissions = permissions.ToArray()
+            };
+
+            return (new JwtSecurityTokenHandler().WriteToken(jwt), expires, profile);
+        }
+
+        private async Task<AuthResult> BuildSessionAsync(AppUser user)
+        {
+            var access = await GenerateAccessTokenAsync(user);
+            var refresh = await _refreshTokens.IssueAsync(user.Id);
+
+            return new AuthResult
+            {
+                IsSuccess = true,
+                Token = access.Token,
+                ExpiresAt = access.Expires,
+                RefreshToken = refresh.Token,
+                RefreshExpiresAt = refresh.ExpiresAt,
+                User = access.User
+            };
         }
 
         public async Task<AuthResult> RegisterAsync(RegisterDto dto)
@@ -103,23 +141,19 @@ namespace BackEnd.Services
 
         public async Task<AuthResult> LoginAsync(LoginDto dto)
         {
+            const string invalidCredentials = "نام‌کاربری یا رمز عبور اشتباه است";
+
             var user = await _userManager.FindByNameAsync(dto.UserName);
             if (user == null)
             {
-                return new AuthResult
-                {
-                    IsSuccess = false,
-                    Errors = ["نام‌کاربری یا رمز عبور اشتباه است"]
-                };
+                _userManager.PasswordHasher.HashPassword(TimingDummyUser, dto.Password);
+
+                return Fail(invalidCredentials);
             }
 
             if (await _userManager.IsLockedOutAsync(user))
             {
-                return new AuthResult
-                {
-                    IsSuccess = false,
-                    Errors = ["حساب کاربری موقتا قفل شده است، لطفا چند دقیقه دیگر امتحان کنید"]
-                };
+                return Fail("حساب کاربری موقتا قفل شده است، لطفا چند دقیقه دیگر امتحان کنید");
             }
 
             if (!await _userManager.CheckPasswordAsync(user, dto.Password))
@@ -128,42 +162,61 @@ namespace BackEnd.Services
 
                 if (await _userManager.IsLockedOutAsync(user))
                 {
-                    return new AuthResult
-                    {
-                        IsSuccess = false,
-                        Errors = ["تلاش های زیاد، حساب کاربری موقتا قفل میشود، لطفا 15 دقیقه دیگر امتحان کنید"]
-                    };
+                    return Fail("تلاش های زیاد، حساب کاربری موقتا قفل میشود، لطفا 15 دقیقه دیگر امتحان کنید");
                 }
 
-                return new AuthResult
-                {
-                    IsSuccess = false,
-                    Errors = ["نام‌کاربری یا رمز عبور اشتباه است"]
-                };
+                return Fail(invalidCredentials);
             }
 
             await _userManager.ResetAccessFailedCountAsync(user);
 
-            var (token, expires) = await GenerateToken(user);
+            return await BuildSessionAsync(user);
+        }
+
+        public async Task<AuthResult> RefreshAsync(string? refreshToken)
+        {
+            const string sessionExpired = "نشست شما منقضی شده است، دوباره وارد شوید";
+
+            var rotation = await _refreshTokens.RotateAsync(refreshToken);
+
+            if (!rotation.Succeeded || rotation.UserId is null || rotation.Token is null)
+            {
+                return Fail(sessionExpired);
+            }
+
+            var user = await _userManager.FindByIdAsync(rotation.UserId);
+
+            if (user is null || await _userManager.IsLockedOutAsync(user))
+            {
+                await _refreshTokens.RevokeAllAsync(rotation.UserId);
+
+                return Fail(sessionExpired);
+            }
+
+            var access = await GenerateAccessTokenAsync(user);
 
             return new AuthResult
             {
                 IsSuccess = true,
-                Token = token,
-                ExpiresAt = expires
+                Token = access.Token,
+                ExpiresAt = access.Expires,
+                RefreshToken = rotation.Token.Token,
+                RefreshExpiresAt = rotation.Token.ExpiresAt,
+                User = access.User
             };
         }
 
-        public async Task<AuthResult> ChangePasswordAsync(string userId, ChangePasswordDto dto)
+        public async Task LogoutAsync(string? refreshToken)
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            await _refreshTokens.RevokeSessionAsync(refreshToken);
+        }
+
+        public async Task<AuthResult> ChangePasswordAsync(string? userId, ChangePasswordDto dto)
+        {
+            var user = userId is null ? null : await _userManager.FindByIdAsync(userId);
             if (user == null)
             {
-                return new AuthResult
-                {
-                    IsSuccess = false,
-                    Errors = ["کاربر یافت نشد"]
-                };
+                return Fail("کاربر یافت نشد");
             }
 
             var result = await _userManager.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
@@ -175,6 +228,8 @@ namespace BackEnd.Services
                     Errors = result.Errors.Select(e => e.Description)
                 };
             }
+
+            await _refreshTokens.RevokeAllAsync(user.Id);
 
             return new AuthResult { IsSuccess = true };
         }

@@ -1,8 +1,10 @@
-﻿using BackEnd.Data;
+﻿using BackEnd.Helpers;
+using BackEnd.Data;
 using BackEnd.DTOs.Category;
 using BackEnd.IServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 
 namespace BackEnd.Controllers
 {
@@ -19,6 +21,7 @@ namespace BackEnd.Controllers
 
         [HttpGet]
         [AllowAnonymous]
+        [OutputCache(PolicyName = "PublicShort")]
         public async Task<IActionResult> GetActiveCategoryTree()
         {
             return Ok(await _service.GetTreeAsync(false));
@@ -47,9 +50,9 @@ namespace BackEnd.Controllers
         [HttpGet("{id:int}/image")]
         [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
         [AllowAnonymous]
-        public async Task<IActionResult> GetCategoryImage(int id)
+        public async Task<IActionResult> GetCategoryImage(int id, [FromQuery] string? size)
         {
-            var image = await _service.GetCategoryImageAsync(id);
+            var image = await _service.GetCategoryImageAsync(id, ImageSize.IsThumbnail(size));
             if (image is null)
             {
                 return NotFound();

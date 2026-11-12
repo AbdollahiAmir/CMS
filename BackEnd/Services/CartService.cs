@@ -31,9 +31,19 @@ namespace BackEnd.Services
             };
 
             _context.Carts.Add(cart);
-            await _context.SaveChangesAsync();
 
-            return cart;
+            try
+            {
+                await _context.SaveChangesAsync();
+
+                return cart;
+            }
+            catch (DbUpdateException)
+            {
+                _context.Entry(cart).State = EntityState.Detached;
+
+                return await _context.Carts.FirstAsync(c => c.UserId == userId);
+            }
         }
 
         private async Task RemoveUnavailableItemsAsync(int cartId)
@@ -177,6 +187,81 @@ namespace BackEnd.Services
             await _context.SaveChangesAsync();
 
             return await BuildCartDtoAsync(cart.Id);
+        }
+
+        public async Task<MergeCartResultDto> MergeAsync(string userId, MergeCartDto dto)
+        {
+            var cart = await GetOrCreateCartAsync(userId);
+            await RemoveUnavailableItemsAsync(cart.Id);
+
+            var requested = dto.Items
+                .GroupBy(i => i.ProductId)
+                .Select(g => new { ProductId = g.Key, Quantity = g.Sum(i => i.Quantity) })
+                .ToList();
+
+            var productIds = requested.Select(r => r.ProductId).ToList();
+
+            var products = await _context.Products
+                .Where(p => productIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id);
+
+            var existingItems = await _context.CartItems
+                .Where(i => i.CartId == cart.Id && productIds.Contains(i.ProductId))
+                .ToDictionaryAsync(i => i.ProductId);
+
+            var skipped = new List<SkippedCartItemDto>();
+
+            foreach (var request in requested)
+            {
+                if (!products.TryGetValue(request.ProductId, out var product) || !product.IsActive)
+                {
+                    skipped.Add(new SkippedCartItemDto { ProductId = request.ProductId, Reason = "NotAvailable" });
+                    continue;
+                }
+
+                if (product.StockQuantity < 1)
+                {
+                    skipped.Add(new SkippedCartItemDto { ProductId = request.ProductId, Reason = "OutOfStock" });
+                    continue;
+                }
+
+                existingItems.TryGetValue(request.ProductId, out var cartItem);
+
+                var wanted = (cartItem?.Quantity ?? 0) + request.Quantity;
+                var allowed = Math.Min(Math.Min(wanted, MaxItemQuantity), product.StockQuantity);
+
+                if (cartItem is null)
+                {
+                    _context.CartItems.Add(new CartItem
+                    {
+                        CartId = cart.Id,
+                        ProductId = request.ProductId,
+                        Quantity = allowed
+                    });
+                }
+                else
+                {
+                    cartItem.Quantity = allowed;
+                }
+
+                if (allowed < wanted)
+                {
+                    skipped.Add(new SkippedCartItemDto
+                    {
+                        ProductId = request.ProductId,
+                        Reason = "QuantityReduced",
+                        AvailableQuantity = allowed
+                    });
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            return new MergeCartResultDto
+            {
+                Cart = await BuildCartDtoAsync(cart.Id),
+                Skipped = skipped
+            };
         }
 
         public async Task<CartDto?> RemoveItemAsync(string userId, int productId)

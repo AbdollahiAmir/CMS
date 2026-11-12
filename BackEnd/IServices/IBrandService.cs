@@ -10,6 +10,6 @@ namespace BackEnd.IServices
         Task<Brand> CreateAsync(CreateBrandDto dto);
         Task<Brand?> PatchAsync(int id, PatchBrandDto dto);
         Task<bool> DeleteAsync(int id);
-        Task<(Stream Stream, string ContentType)?> GetBrandLogoAsync(int id, bool onlyActive);
+        Task<(Stream Stream, string ContentType)?> GetBrandLogoAsync(int id, bool onlyActive, bool thumbnail = false);
     }
 }

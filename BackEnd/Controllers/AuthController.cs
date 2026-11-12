@@ -22,6 +22,38 @@ namespace BackEnd.Controllers
             _config = config;
         }
 
+        private static DateTimeOffset AsUtc(DateTime value)
+        {
+            return new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc));
+        }
+
+        private void SetAuthCookies(AuthResult result)
+        {
+            Response.Cookies.Append(
+                AuthCookie.Name,
+                result.Token!,
+                AuthCookie.Create(_config, AsUtc(result.ExpiresAt!.Value)));
+
+            Response.Cookies.Append(
+                AuthCookie.RefreshName,
+                result.RefreshToken!,
+                AuthCookie.Create(_config, AsUtc(result.RefreshExpiresAt!.Value), AuthCookie.RefreshPath));
+        }
+
+        private void ClearAuthCookies()
+        {
+            Response.Cookies.Delete(AuthCookie.Name, AuthCookie.Create(_config, null));
+            Response.Cookies.Delete(AuthCookie.RefreshName, AuthCookie.Create(_config, null, AuthCookie.RefreshPath));
+        }
+
+        private static bool HasFullSession(AuthResult result)
+        {
+            return !string.IsNullOrEmpty(result.Token)
+                && !string.IsNullOrEmpty(result.RefreshToken)
+                && result.ExpiresAt is not null
+                && result.RefreshExpiresAt is not null;
+        }
+
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
         [HttpPost("register")]
@@ -48,25 +80,51 @@ namespace BackEnd.Controllers
                 return Unauthorized(new { errors = result.Errors });
             }
 
-            if (string.IsNullOrEmpty(result.Token) || result.ExpiresAt is null)
+            if (!HasFullSession(result))
             {
                 return Unauthorized(new { message = "احراز هویت با شکست مواجه شد." });
             }
 
-            Response.Cookies.Append(AuthCookie.Name, result.Token, AuthCookie.Create(_config, new DateTimeOffset(result.ExpiresAt.Value)));
+            SetAuthCookies(result);
 
             return Ok(new
             {
                 message = "ورود با موفقیت انجام شد.",
-                expiresAt = result.ExpiresAt
+                expiresAt = result.ExpiresAt,
+                user = result.User
+            });
+        }
+
+        [AllowAnonymous]
+        [EnableRateLimiting("refresh")]
+        [HttpPost("refresh")]
+        public async Task<IActionResult> Refresh()
+        {
+            var result = await _service.RefreshAsync(Request.Cookies[AuthCookie.RefreshName]);
+
+            if (!result.IsSuccess || !HasFullSession(result))
+            {
+                ClearAuthCookies();
+
+                return Unauthorized(new { errors = result.Errors });
+            }
+
+            SetAuthCookies(result);
+
+            return Ok(new
+            {
+                expiresAt = result.ExpiresAt,
+                user = result.User
             });
         }
 
         [AllowAnonymous]
         [HttpPost("logout")]
-        public IActionResult Logout()
+        public async Task<IActionResult> Logout()
         {
-            Response.Cookies.Delete(AuthCookie.Name, AuthCookie.Create(_config, null));
+            await _service.LogoutAsync(Request.Cookies[AuthCookie.RefreshName]);
+
+            ClearAuthCookies();
 
             return Ok(new { message = "خروج با موفقیت انجام شد" });
         }
@@ -114,7 +172,9 @@ namespace BackEnd.Controllers
                 return BadRequest(new { errors = result.Errors });
             }
 
-            return Ok(new { message = "تغییر رمز با موفقیت انجام شد" });
+            ClearAuthCookies();
+
+            return Ok(new { message = "تغییر رمز با موفقیت انجام شد، دوباره وارد شوید" });
         }
     }
 }

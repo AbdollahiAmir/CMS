@@ -1,4 +1,5 @@
-﻿namespace BackEnd.Data
+﻿
+namespace BackEnd.Data
 {
     public static class AppPermissions
     {
@@ -14,6 +15,17 @@
         public const string UsersManage = "Users.Manage";
         public const string RolesManage = "Roles.Manage";
 
+        public const string PagesView = "Pages.View";
+        public const string PagesManage = "Pages.Manage";
+        public const string PagesPublish = "Pages.Publish";
+
+        public const string PostsView = "Posts.View";
+        public const string PostsManage = "Posts.Manage";
+        public const string PostsPublish = "Posts.Publish";
+
+        public const string PostCategoriesManage = "PostCategories.Manage";
+        public const string TagsManage = "Tags.Manage";
+
         public static readonly IReadOnlyList<string> All =
         [
             CategoriesManage,
@@ -24,7 +36,15 @@
             OrdersView,
             OrdersManage,
             UsersManage,
-            RolesManage
+            RolesManage,
+            PagesView,
+            PagesManage,
+            PagesPublish,
+            PostsView,
+            PostsManage,
+            PostsPublish,
+            PostCategoriesManage,
+            TagsManage
         ];
     }
 }

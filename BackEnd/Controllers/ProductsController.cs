@@ -1,4 +1,5 @@
-﻿using BackEnd.Data;
+﻿using BackEnd.Helpers;
+using BackEnd.Data;
 using BackEnd.DTOs.ProductDTOs;
 using BackEnd.IServices.IProductServices;
 using Microsoft.AspNetCore.Authorization;
@@ -39,9 +40,9 @@ namespace BackEnd.Controllers
 
         [HttpGet("{id:int}/image")]
         [Authorize(Policy = AppPermissions.ProductsView)]
-        public async Task<IActionResult> GetProductImage(int id)
+        public async Task<IActionResult> GetProductImage(int id, [FromQuery] string? size)
         {
-            var image = await _service.GetProductImageAsync(id);
+            var image = await _service.GetProductImageAsync(id, ImageSize.IsThumbnail(size));
             if (image is null)
             {
                 return NotFound();
