@@ -36,7 +36,11 @@ builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLi
 
 // Add services to the container.
 
-builder.Services.AddControllers(options => options.Filters.Add<AppExceptionFilter>())
+builder.Services.AddControllers(options =>
+    {
+        options.Filters.Add<AppExceptionFilter>();
+        options.Filters.Add<PublicCacheEvictionFilter>();
+    })
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -203,6 +207,7 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddOutputCache(options =>
 {
     options.AddPolicy("PublicShort", policy => policy
+        .Tag(PublicCacheEvictionFilter.Tag)
         .Expire(TimeSpan.FromSeconds(30))
         .SetVaryByQuery("*")
         .SetVaryByHeader("Origin"));
@@ -233,6 +238,13 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
+}
+
+if (builder.Configuration.GetValue<bool>("Database:AutoMigrate"))
+{
+    using var migrationScope = app.Services.CreateScope();
+    var db = migrationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
 }
 
 using (var scope = app.Services.CreateScope())

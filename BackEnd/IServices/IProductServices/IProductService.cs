@@ -13,9 +13,9 @@ namespace BackEnd.IServices.IProductServices
 
         Task<ProductDto?> PatchAsync(int id, PatchProductDto dto);
 
-        Task<bool> DeleteAsync(int id);
+        Task<bool> DeleteAsync(int id, string? rowVersion);
 
-        Task<ProductDto?> SetActiveAsync(int id, bool isActive);
+        Task<ProductDto?> SetActiveAsync(int id, bool isActive, string? rowVersion);
 
         Task<(Stream Stream, string ContentType)?> GetProductImageAsync(int id, bool thumbnail = false);
     }

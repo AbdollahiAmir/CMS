@@ -4,6 +4,9 @@ namespace BackEnd.DTOs.ProductDTOs
 {
     public class PatchProductDto
     {
+        [Required(ErrorMessage = "نسخه اطلاعات الزامی است")]
+        public string RowVersion { get; set; } = string.Empty;
+
         [MaxLength(250)]
         public string? Name { get; set; }
 

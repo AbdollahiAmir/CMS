@@ -181,7 +181,7 @@ namespace BackEnd.Services
             return Map(contentPage);
         }
 
-        public async Task<ContentPageDto?> SetPublicationAsync(int id, bool isPublished, string? rowVersion)
+        public async Task<ContentPageDto?> SetPublicationAsync(int id, bool isPublished, string? userId, string? rowVersion)
         {
             var contentPage = await _context.ContentPages.FirstOrDefaultAsync(p => p.Id == id);
 
@@ -199,6 +199,7 @@ namespace BackEnd.Services
 
             contentPage.IsPublished = isPublished;
             contentPage.PublishedAt = isPublished ? contentPage.PublishedAt ?? DateTime.UtcNow : null;
+            contentPage.UpdatedByUserId = userId;
             contentPage.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();

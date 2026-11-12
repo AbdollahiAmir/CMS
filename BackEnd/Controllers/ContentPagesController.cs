@@ -89,6 +89,7 @@ namespace BackEnd.Controllers
             var page = await _service.SetPublicationAsync(
                 id,
                 dto.IsPublished,
+                CurrentUserId,
                 dto.RowVersion);
 
             if (page is null)

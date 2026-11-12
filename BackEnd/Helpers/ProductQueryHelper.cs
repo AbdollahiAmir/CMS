@@ -27,7 +27,8 @@ namespace BackEnd.Helpers
             Brand = p.Brand == null ? null : new BrandSummaryDto { Id = p.Brand.Id, Name = p.Brand.Name },
             Categories = p.Categories.Select(c => new CategorySummaryDto { Id = c.Id, Name = c.Name, Slug = c.Slug }).ToList(),
             CreatedAt = p.CreatedAt,
-            UpdatedAt = p.UpdatedAt
+            UpdatedAt = p.UpdatedAt,
+            RowVersion = p.RowVersion
         };
 
         public static readonly Expression<Func<Product, PublicProductDto>> PublicProjection = p => new PublicProductDto

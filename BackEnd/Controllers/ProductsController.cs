@@ -25,6 +25,11 @@ namespace BackEnd.Controllers
             return Ok(await _service.GetAllAsync(query));
         }
 
+        private void SetETag(byte[] rowVersion)
+        {
+            Response.Headers["ETag"] = RowVersionHelper.ToETag(RowVersionHelper.Encode(rowVersion));
+        }
+
         [HttpGet("{id:int}")]
         [Authorize(Policy = AppPermissions.ProductsView)]
         public async Task<IActionResult> GetProductById(int id)
@@ -34,6 +39,8 @@ namespace BackEnd.Controllers
             {
                 return NotFound();
             }
+
+            SetETag(product.RowVersion);
 
             return Ok(product);
         }
@@ -58,6 +65,8 @@ namespace BackEnd.Controllers
         {
             var product = await _service.CreateAsync(dto);
 
+            SetETag(product.RowVersion);
+
             return CreatedAtAction(nameof(GetProductById), new { id = product.Id }, product);
         }
 
@@ -72,14 +81,16 @@ namespace BackEnd.Controllers
                 return NotFound();
             }
 
+            SetETag(product.RowVersion);
+
             return Ok(product);
         }
 
         [HttpDelete("{id:int}")]
         [Authorize(Policy = AppPermissions.ProductsManage)]
-        public async Task<IActionResult> DeleteProduct(int id)
+        public async Task<IActionResult> DeleteProduct(int id, [FromHeader(Name = "If-Match")] string? rowVersion)
         {
-            var deleted = await _service.DeleteAsync(id);
+            var deleted = await _service.DeleteAsync(id, rowVersion);
             if (!deleted)
             {
                 return NotFound();
@@ -92,11 +103,13 @@ namespace BackEnd.Controllers
         [Authorize(Policy = AppPermissions.ProductsToggleActive)]
         public async Task<IActionResult> SetActive(int id, SetProductActiveDto dto)
         {
-            var product = await _service.SetActiveAsync(id, dto.IsActive);
+            var product = await _service.SetActiveAsync(id, dto.IsActive, dto.RowVersion);
             if (product is null)
             {
                 return NotFound();
             }
+
+            SetETag(product.RowVersion);
 
             return Ok(product);
         }

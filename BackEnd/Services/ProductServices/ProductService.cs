@@ -13,16 +13,23 @@ namespace BackEnd.Services.ProductServices
     {
         private readonly AppDbContext _context;
         private readonly IFileService _fileService;
+        private readonly IHtmlContentSanitizer _htmlSanitizer;
 
-        public ProductService(AppDbContext context, IFileService fileService)
+        public ProductService(AppDbContext context, IFileService fileService, IHtmlContentSanitizer htmlSanitizer)
         {
             _context = context;
             _fileService = fileService;
+            _htmlSanitizer = htmlSanitizer;
         }
 
         private static string? Clean(string? value)
         {
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+
+        private string? CleanHtml(string? value)
+        {
+            return Clean(_htmlSanitizer.Sanitize(value));
         }
 
         private static void ValidatePricing(decimal price, decimal? salePrice)
@@ -106,7 +113,7 @@ namespace BackEnd.Services.ProductServices
                 Slug = await SlugHelper.ResolveAsync(dto.Slug, name, s => _context.Products.AnyAsync(p => p.Slug == s)),
                 Sku = sku,
                 ShortDescription = Clean(dto.ShortDescription),
-                Description = Clean(dto.Description),
+                Description = CleanHtml(dto.Description),
                 SeoTitle = Clean(dto.SeoTitle),
                 MetaDescription = Clean(dto.MetaDescription),
                 Price = dto.Price,
@@ -145,6 +152,8 @@ namespace BackEnd.Services.ProductServices
                 return null;
             }
 
+            RowVersionHelper.SetOriginalValue(_context, product, dto.RowVersion);
+
             if (dto.Name is not null)
             {
                 var name = dto.Name.Trim();
@@ -182,7 +191,7 @@ namespace BackEnd.Services.ProductServices
 
             if (dto.Description is not null)
             {
-                product.Description = Clean(dto.Description);
+                product.Description = CleanHtml(dto.Description);
             }
 
             if (dto.SeoTitle is not null)
@@ -274,13 +283,15 @@ namespace BackEnd.Services.ProductServices
             return await GetByIdAsync(id);
         }
 
-        public async Task<bool> DeleteAsync(int id)
+        public async Task<bool> DeleteAsync(int id, string? rowVersion)
         {
             var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == id);
             if (product is null)
             {
                 return false;
             }
+
+            RowVersionHelper.SetOriginalValue(_context, product, rowVersion);
 
             var imagePath = product.ImgPath;
 
@@ -296,13 +307,15 @@ namespace BackEnd.Services.ProductServices
             return true;
         }
 
-        public async Task<ProductDto?> SetActiveAsync(int id, bool isActive)
+        public async Task<ProductDto?> SetActiveAsync(int id, bool isActive, string? rowVersion)
         {
             var product = await _context.Products.Include(p => p.Categories).FirstOrDefaultAsync(p => p.Id == id);
             if (product is null)
             {
                 return null;
             }
+
+            RowVersionHelper.SetOriginalValue(_context, product, rowVersion);
 
             if (isActive && product.Categories.Count == 0)
             {
