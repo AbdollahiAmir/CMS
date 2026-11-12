@@ -23,7 +23,9 @@ namespace BackEnd.Filters
             "Tags",
             "Products",
             "ProductCategories",
-            "Brands"
+            "Brands",
+            "Menus",
+            "SiteSettings"
         };
 
         private readonly IOutputCacheStore _store;

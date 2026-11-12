@@ -117,3 +117,49 @@ dotnet ef database update --project BackEnd
 | `Site:ProductPathTemplate` | مسیر محصول، پیش‌فرض `/products/{slug}` |
 
 نقشه‌ی سایت شامل صفحه‌ی اصلی، پست‌ها و صفحات منتشرشده و محصولات فعال است و حداکثر ۵۰٬۰۰۰ آدرس دارد. موتورهای جست‌وجو انتظار دارند فایل روی همان دامنه‌ی آدرس‌ها باشد، پس فرانت‌اند یا reverse proxy باید این دو مسیر را به بک‌اند هدایت کند و در `robots.txt` خط `Sitemap: https://example.com/sitemap.xml` قرار گیرد.
+
+## منو
+
+منوها با کلید یکتا ساخته می‌شوند (مثلاً `header` و `footer`) و هر منو یک درخت از آیتم‌ها دارد. حداکثر عمق ۳ سطح و حداکثر ۱۰۰ آیتم است.
+
+| متد و مسیر | مجوز | توضیح |
+| --- | --- | --- |
+| `GET /api/Menus` | `Menus.Manage` | لیست منوها |
+| `GET /api/Menus/{id}` | `Menus.Manage` | منو با درخت آیتم‌ها |
+| `POST /api/Menus` | `Menus.Manage` | ساخت منو با `key` و `name` |
+| `PATCH /api/Menus/{id}` | `Menus.Manage` | ویرایش نام |
+| `PUT /api/Menus/{id}/items` | `Menus.Manage` | جایگزینی کامل آیتم‌ها |
+| `DELETE /api/Menus/{id}` | `Menus.Manage` | حذف منو و آیتم‌ها |
+| `GET /api/PublicContent/menus/{key}` | عمومی | خروجی عمومی منو، کش‌شده |
+
+بدنه‌ی `PUT /api/Menus/{id}/items`:
+
+```json
+{
+  "items": [
+    { "title": "خانه", "url": "/" },
+    {
+      "title": "وبلاگ",
+      "url": "/blog",
+      "children": [
+        { "title": "اخبار", "url": "/blog/news", "openInNewTab": false }
+      ]
+    },
+    { "title": "گیت‌هاب", "url": "https://github.com", "openInNewTab": true }
+  ]
+}
+```
+
+ترتیب آیتم‌ها همان ترتیب آرایه است. آدرس باید مسیر نسبی با `/` یا آدرس کامل `http` و `https` باشد و مقادیر دیگر مثل `javascript:` رد می‌شوند.
+
+## تنظیمات سایت
+
+| متد و مسیر | مجوز | توضیح |
+| --- | --- | --- |
+| `GET /api/SiteSettings` | `Settings.Manage` | خواندن تنظیمات |
+| `PUT /api/SiteSettings` | `Settings.Manage` | ذخیره‌ی کامل تنظیمات |
+| `GET /api/PublicContent/site-settings` | عمومی | خروجی عمومی، کش‌شده |
+
+فیلدها: `siteName`، `tagline`، `logoUrl`، `faviconUrl`، `defaultSeoTitle`، `defaultMetaDescription`، `contactEmail`، `contactPhone`، `address`، `instagramUrl`، `telegramUrl`، `whatsappUrl`، `linkedinUrl`، `xUrl` و `footerText`. `logoUrl` و `faviconUrl` را می‌توان از `url` کتابخانه‌ی مدیا پر کرد و آن تصویر تا زمانی که در تنظیمات یا منو استفاده شده باشد قابل حذف نیست. فیلدی که ارسال نشود یا خالی باشد پاک می‌شود، پس همیشه مقدار کامل را بفرستید.
+
+مجوزهای `Menus.Manage` و `Settings.Manage` برای نقش‌های سفارشی باید دستی اضافه شوند. نقش Admin همه‌ی مجوزها را دارد. مقدار `Site:Title` در appsettings فقط برای فید RSS استفاده می‌شود و از تنظیمات سایت جدا است.

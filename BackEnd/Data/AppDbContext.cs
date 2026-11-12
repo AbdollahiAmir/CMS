@@ -21,6 +21,9 @@ namespace BackEnd.Data
         public DbSet<PostCategory> PostCategories { get; set; }
         public DbSet<Tag> Tags { get; set; }
         public DbSet<MediaFile> MediaFiles { get; set; }
+        public DbSet<Menu> Menus { get; set; }
+        public DbSet<MenuItem> MenuItems { get; set; }
+        public DbSet<SiteSetting> SiteSettings { get; set; }
 
         public DbSet<RefreshToken> RefreshTokens { get; set; }
 
@@ -180,6 +183,22 @@ namespace BackEnd.Data
 
             builder.Entity<MediaFile>()
                 .HasIndex(m => m.CreatedAt);
+
+            builder.Entity<Menu>()
+                .HasIndex(m => m.Key)
+                .IsUnique();
+
+            builder.Entity<MenuItem>()
+                .HasOne(i => i.Menu)
+                .WithMany(m => m.Items)
+                .HasForeignKey(i => i.MenuId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<MenuItem>()
+                .HasOne(i => i.Parent)
+                .WithMany(i => i.Children)
+                .HasForeignKey(i => i.ParentId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             builder.Entity<RefreshToken>()
                 .HasIndex(t => t.TokenHash)

@@ -71,6 +71,8 @@ builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<IMediaService, MediaService>();
 builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection("Site"));
 builder.Services.AddScoped<ISeoService, SeoService>();
+builder.Services.AddScoped<IMenuService, MenuService>();
+builder.Services.AddScoped<ISiteSettingsService, SiteSettingsService>();
 builder.Services.AddScoped<IHtmlContentSanitizer, HtmlContentSanitizer>();
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();

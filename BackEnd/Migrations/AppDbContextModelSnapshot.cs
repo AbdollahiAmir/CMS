@@ -278,6 +278,74 @@ namespace API.Migrations
                     b.ToTable("MediaFiles");
                 });
 
+            modelBuilder.Entity("BackEnd.Models.Menu", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("Menus");
+                });
+
+            modelBuilder.Entity("BackEnd.Models.MenuItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("MenuId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("OpenInNewTab")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("ParentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MenuId");
+
+                    b.HasIndex("ParentId");
+
+                    b.ToTable("MenuItems");
+                });
+
             modelBuilder.Entity("BackEnd.Models.Order", b =>
                 {
                     b.Property<int>("Id")
@@ -706,6 +774,83 @@ namespace API.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
+            modelBuilder.Entity("BackEnd.Models.SiteSetting", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedNever()
+                        .HasColumnType("int");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ContactPhone")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("DefaultMetaDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("DefaultSeoTitle")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("FaviconUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("FooterText")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("InstagramUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("LinkedinUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("SiteName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Tagline")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("TelegramUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WhatsappUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("XUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SiteSettings");
+                });
+
             modelBuilder.Entity("BackEnd.Models.Tag", b =>
                 {
                     b.Property<int>("Id")
@@ -925,6 +1070,24 @@ namespace API.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("BackEnd.Models.MenuItem", b =>
+                {
+                    b.HasOne("BackEnd.Models.Menu", "Menu")
+                        .WithMany("Items")
+                        .HasForeignKey("MenuId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BackEnd.Models.MenuItem", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Menu");
+
+                    b.Navigation("Parent");
+                });
+
             modelBuilder.Entity("BackEnd.Models.Order", b =>
                 {
                     b.HasOne("BackEnd.Models.AppUser", "User")
@@ -1084,6 +1247,16 @@ namespace API.Migrations
             modelBuilder.Entity("BackEnd.Models.Cart", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("BackEnd.Models.Menu", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("BackEnd.Models.MenuItem", b =>
+                {
+                    b.Navigation("Children");
                 });
 
             modelBuilder.Entity("BackEnd.Models.Order", b =>

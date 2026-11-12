@@ -29,6 +29,9 @@ namespace BackEnd.Data
         public const string MediaView = "Media.View";
         public const string MediaManage = "Media.Manage";
 
+        public const string MenusManage = "Menus.Manage";
+        public const string SettingsManage = "Settings.Manage";
+
         public static readonly IReadOnlyList<string> All =
         [
             CategoriesManage,
@@ -49,7 +52,9 @@ namespace BackEnd.Data
             PostCategoriesManage,
             TagsManage,
             MediaView,
-            MediaManage
+            MediaManage,
+            MenusManage,
+            SettingsManage
         ];
     }
 }

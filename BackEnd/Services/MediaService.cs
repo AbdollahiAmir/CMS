@@ -152,11 +152,15 @@ namespace BackEnd.Services
             var isUsed =
                 await _context.Posts.AnyAsync(p => p.Content.Contains(url)) ||
                 await _context.ContentPages.AnyAsync(p => p.Content.Contains(url)) ||
-                await _context.Products.AnyAsync(p => p.Description != null && p.Description.Contains(url));
+                await _context.Products.AnyAsync(p => p.Description != null && p.Description.Contains(url)) ||
+                await _context.MenuItems.AnyAsync(i => i.Url.Contains(url)) ||
+                await _context.SiteSettings.AnyAsync(s =>
+                    (s.LogoUrl != null && s.LogoUrl.Contains(url)) ||
+                    (s.FaviconUrl != null && s.FaviconUrl.Contains(url)));
 
             if (isUsed)
             {
-                throw new ArgumentException("این تصویر در محتوای یک مقاله، صفحه یا محصول استفاده شده و قابل حذف نیست");
+                throw new ArgumentException("این تصویر در محتوای یک مقاله، صفحه، محصول، منو یا تنظیمات سایت استفاده شده و قابل حذف نیست");
             }
 
             var storedName = media.StoredName;
