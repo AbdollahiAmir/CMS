@@ -196,6 +196,138 @@ namespace BackEnd.Services
             return post is null ? null : MapPost(post);
         }
 
+        public async Task<List<PublicPostListItemDto>?> GetRelatedPostsAsync(string slug, int count)
+        {
+            var normalizedSlug = slug.Trim();
+            var take = Math.Clamp(count, 1, 12);
+
+            var current = await _context.Posts
+                .AsNoTracking()
+                .Where(p => p.Slug == normalizedSlug && p.IsPublished)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.CategoryId,
+                    TagIds = p.Tags.Select(t => t.Id).ToList()
+                })
+                .FirstOrDefaultAsync();
+
+            if (current is null)
+            {
+                return null;
+            }
+
+            var categoryId = current.CategoryId;
+            var tagIds = current.TagIds;
+
+            if (categoryId is null && tagIds.Count == 0)
+            {
+                return [];
+            }
+
+            var candidates = await _context.Posts
+                .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.Tags)
+                .Where(p =>
+                    p.IsPublished &&
+                    p.Id != current.Id &&
+                    ((categoryId != null && p.CategoryId == categoryId) ||
+                     p.Tags.Any(t => tagIds.Contains(t.Id))))
+                .OrderByDescending(p => p.PublishedAt)
+                .ThenByDescending(p => p.Id)
+                .Take(60)
+                .ToListAsync();
+
+            return candidates
+                .Select(p => new
+                {
+                    Post = p,
+                    Score = p.Tags.Count(t => tagIds.Contains(t.Id)) * 2 +
+                            (categoryId != null && p.CategoryId == categoryId ? 1 : 0)
+                })
+                .OrderByDescending(x => x.Score)
+                .ThenByDescending(x => x.Post.PublishedAt)
+                .ThenByDescending(x => x.Post.Id)
+                .Take(take)
+                .Select(x => MapPostListItem(x.Post))
+                .ToList();
+        }
+
+        public async Task<PublicSearchResultDto> SearchAsync(string query, int limit)
+        {
+            var term = query.Trim();
+            var take = Math.Clamp(limit, 1, 20);
+
+            var result = new PublicSearchResultDto { Query = term };
+
+            if (term.Length < 2)
+            {
+                return result;
+            }
+
+            if (term.Length > 100)
+            {
+                term = term[..100];
+                result.Query = term;
+            }
+
+            var posts = await _context.Posts
+                .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.Tags)
+                .Where(p =>
+                    p.IsPublished &&
+                    (p.Title.Contains(term) ||
+                     (p.Excerpt != null && p.Excerpt.Contains(term))))
+                .OrderByDescending(p => p.PublishedAt)
+                .ThenByDescending(p => p.Id)
+                .Take(take)
+                .ToListAsync();
+
+            result.Posts = posts.Select(MapPostListItem).ToList();
+
+            result.Pages = await _context.ContentPages
+                .AsNoTracking()
+                .Where(p =>
+                    p.IsPublished &&
+                    (p.Title.Contains(term) ||
+                     (p.Excerpt != null && p.Excerpt.Contains(term))))
+                .OrderBy(p => p.Title)
+                .Take(take)
+                .Select(p => new PublicSearchPageDto
+                {
+                    Title = p.Title,
+                    Slug = p.Slug,
+                    Excerpt = p.Excerpt
+                })
+                .ToListAsync();
+
+            result.Products = await _context.Products
+                .AsNoTracking()
+                .Where(p =>
+                    p.IsActive &&
+                    (p.Name.Contains(term) ||
+                     (p.Sku != null && p.Sku.Contains(term)) ||
+                     (p.ShortDescription != null && p.ShortDescription.Contains(term))))
+                .OrderByDescending(p => p.CreatedAt)
+                .Take(take)
+                .Select(p => new PublicSearchProductDto
+                {
+                    Name = p.Name,
+                    Slug = p.Slug,
+                    Price = p.Price,
+                    SalePrice = p.SalePrice,
+                    InStock = p.StockQuantity > 0,
+                    ImageUrl = p.ImgPath != null
+                        ? "/api/PublicProducts/products/" + p.Id + "/image?size=thumb"
+                        : null
+                })
+                .ToListAsync();
+
+            return result;
+        }
+
         public async Task<List<PublicCategoryDto>> GetCategoriesAsync()
         {
             return await _context.PostCategories

@@ -41,6 +41,7 @@ builder.Services.AddControllers(options =>
         options.Filters.Add<AppExceptionFilter>();
         options.Filters.Add<PublicCacheEvictionFilter>();
         options.Filters.Add<AuditLogFilter>();
+        options.Filters.Add<AuthorVisibilityFilter>();
     })
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddOpenApi();

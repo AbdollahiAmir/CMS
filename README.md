@@ -197,3 +197,10 @@ dotnet ef database update --project BackEnd
 - `GET /api/Products/{id}/attributes` و `PUT /api/Products/{id}/attributes`: خواندن و جایگزینی کامل مقدارها با `{ "items": [{ "attributeId": 1, "value": "قرمز" }] }`. مقدار خالی یعنی حذف آن ویژگی؛ حداکثر ۵۰ مورد
 - جزئیات محصول در پنل و سایت (`ProductDto` و `PublicProductDto`) فیلدهای `images` و `attributes` را دارد
 - سایت عمومی: `GET /api/PublicProducts/products/{id}/images/{imageId}?size=thumb`، `GET /api/PublicProducts/attributes` (ویژگی‌های فیلترپذیر با مقادیر محصولات فعال) و فیلتر فهرست محصولات با `attr=attributeId:value`، مثلاً `?attr=1:قرمز&attr=1:آبی&attr=2:پنبه` (OR میان مقدارهای یک ویژگی و AND میان ویژگی‌های مختلف، حداکثر ۱۰ شرط)
+
+## نویسنده، مقاله‌های مرتبط و جست‌وجو
+
+خروجی عمومی هیچ اطلاعاتی از نویسنده یا ویرایشگر ندارد. در پنل مدیریت، فیلدهای `authorId`، `authorName`، `createdByUserId`، `createdByName`، `updatedByUserId`، `updatedByName` و `createdByUserId` نسخه‌ها فقط برای کسی پر می‌شود که مجوز `Authors.View` دارد؛ برای بقیه‌ی ادمین‌ها `null` برمی‌گردد. این پوشش روی همه‌ی پاسخ‌های `Posts` و `ContentPages` (فهرست، جزئیات، ایجاد، ویرایش، انتشار، زمان‌بندی، نسخه‌ها و بازگردانی) اعمال می‌شود. نقش Admin این مجوز را خودکار دارد و برای نقش‌های سفارشی باید دستی اضافه شود.
+
+- `GET /api/PublicContent/posts/{slug}/related?count=4`: مقاله‌های مرتبط (حداکثر ۱۲). امتیاز هر مقاله دو برابر تعداد برچسب مشترک به‌اضافه‌ی یک اگر هم‌دسته باشد؛ در امتیاز برابر جدیدترین جلوتر است
+- `GET /api/PublicContent/search?q=...&limit=5`: جست‌وجوی یکپارچه در مقاله‌ها، صفحه‌ها و محصولات فعال (عنوان، خلاصه، و برای محصول نام، کد و توضیح کوتاه). حداقل ۲ و حداکثر ۱۰۰ نویسه، `limit` تا ۲۰ در هر گروه، با محدودیت نرخ `lookup` و کش کوتاه

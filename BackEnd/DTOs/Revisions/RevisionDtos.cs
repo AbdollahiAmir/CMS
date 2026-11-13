@@ -8,6 +8,7 @@ namespace BackEnd.DTOs.Revisions
         public string Title { get; set; } = string.Empty;
         public string Action { get; set; } = string.Empty;
         public string? CreatedByUserId { get; set; }
+        public string? CreatedByName { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 

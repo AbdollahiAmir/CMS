@@ -17,7 +17,9 @@
         public string? CategoryName { get; set; }
         public List<TagSummaryDto> Tags { get; set; } = [];
         public string? AuthorId { get; set; }
+        public string? AuthorName { get; set; }
         public string? UpdatedByUserId { get; set; }
+        public string? UpdatedByName { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public string RowVersion { get; set; } = string.Empty;

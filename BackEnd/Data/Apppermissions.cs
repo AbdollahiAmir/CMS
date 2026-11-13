@@ -32,6 +32,7 @@ namespace BackEnd.Data
         public const string MenusManage = "Menus.Manage";
         public const string SettingsManage = "Settings.Manage";
         public const string AuditView = "Audit.View";
+        public const string AuthorsView = "Authors.View";
 
         public static readonly IReadOnlyList<string> All =
         [
@@ -56,7 +57,8 @@ namespace BackEnd.Data
             MediaManage,
             MenusManage,
             SettingsManage,
-            AuditView
+            AuditView,
+            AuthorsView
         ];
     }
 }

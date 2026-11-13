@@ -13,7 +13,9 @@
         public DateTime? PublishedAt { get; set; }
         public DateTime? ScheduledAt { get; set; }
         public string? CreatedByUserId { get; set; }
+        public string? CreatedByName { get; set; }
         public string? UpdatedByUserId { get; set; }
+        public string? UpdatedByName { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public string RowVersion { get; set; } = string.Empty;

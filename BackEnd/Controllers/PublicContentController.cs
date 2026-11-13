@@ -4,6 +4,7 @@ using BackEnd.IServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BackEnd.Controllers
 {
@@ -60,6 +61,28 @@ namespace BackEnd.Controllers
             }
 
             return Ok(post);
+        }
+
+        [HttpGet("posts/{slug}/related")]
+        [OutputCache(PolicyName = "PublicShort")]
+        public async Task<IActionResult> GetRelatedPosts(string slug, [FromQuery] int count = 4)
+        {
+            var posts = await _service.GetRelatedPostsAsync(slug, count);
+
+            if (posts is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(posts);
+        }
+
+        [HttpGet("search")]
+        [EnableRateLimiting("lookup")]
+        [OutputCache(PolicyName = "PublicShort")]
+        public async Task<IActionResult> Search([FromQuery] PublicSearchQueryDto query)
+        {
+            return Ok(await _service.SearchAsync(query.Q ?? string.Empty, query.Limit));
         }
 
         [HttpGet("categories")]
