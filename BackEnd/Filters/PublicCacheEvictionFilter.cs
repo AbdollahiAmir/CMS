@@ -23,6 +23,7 @@ namespace BackEnd.Filters
             "Tags",
             "Products",
             "ProductCategories",
+            "ProductAttributes",
             "Brands",
             "Menus",
             "SiteSettings"

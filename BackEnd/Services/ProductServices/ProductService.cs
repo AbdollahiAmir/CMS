@@ -14,12 +14,21 @@ namespace BackEnd.Services.ProductServices
         private readonly AppDbContext _context;
         private readonly IFileService _fileService;
         private readonly IHtmlContentSanitizer _htmlSanitizer;
+        private readonly IProductGalleryService _gallery;
+        private readonly IProductAttributeService _attributes;
 
-        public ProductService(AppDbContext context, IFileService fileService, IHtmlContentSanitizer htmlSanitizer)
+        public ProductService(
+            AppDbContext context,
+            IFileService fileService,
+            IHtmlContentSanitizer htmlSanitizer,
+            IProductGalleryService gallery,
+            IProductAttributeService attributes)
         {
             _context = context;
             _fileService = fileService;
             _htmlSanitizer = htmlSanitizer;
+            _gallery = gallery;
+            _attributes = attributes;
         }
 
         private static string? Clean(string? value)
@@ -81,7 +90,17 @@ namespace BackEnd.Services.ProductServices
 
         public async Task<ProductDto?> GetByIdAsync(int id)
         {
-            return await _context.Products.AsNoTracking().Where(p => p.Id == id).Select(ProductQueryHelper.AdminProjection).FirstOrDefaultAsync();
+            var product = await _context.Products.AsNoTracking().Where(p => p.Id == id).Select(ProductQueryHelper.AdminProjection).FirstOrDefaultAsync();
+
+            if (product is null)
+            {
+                return null;
+            }
+
+            product.Images = await _gallery.GetImagesAsync(id, false);
+            product.Attributes = await _attributes.GetValuesAsync(id);
+
+            return product;
         }
 
         public async Task<ProductDto> CreateAsync(CreateProductDto dto)
@@ -295,6 +314,11 @@ namespace BackEnd.Services.ProductServices
 
             var imagePath = product.ImgPath;
 
+            var galleryPaths = await _context.ProductImages
+                .Where(i => i.ProductId == id)
+                .Select(i => i.Path)
+                .ToListAsync();
+
             var cartItems = await _context.CartItems.Where(i => i.ProductId == id).ToListAsync();
 
             _context.CartItems.RemoveRange(cartItems);
@@ -303,6 +327,11 @@ namespace BackEnd.Services.ProductServices
             await _context.SaveChangesAsync();
 
             await _fileService.DeleteProductImageAsync(imagePath);
+
+            foreach (var path in galleryPaths)
+            {
+                await _fileService.DeleteProductImageAsync(path);
+            }
 
             return true;
         }

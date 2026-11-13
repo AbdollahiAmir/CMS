@@ -794,6 +794,67 @@ namespace API.Migrations
                     b.ToTable("Products");
                 });
 
+            modelBuilder.Entity("BackEnd.Models.ProductAttribute", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsFilterable")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.ToTable("ProductAttributes");
+                });
+
+            modelBuilder.Entity("BackEnd.Models.ProductAttributeValue", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AttributeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttributeId", "Value");
+
+                    b.HasIndex("ProductId", "AttributeId")
+                        .IsUnique();
+
+                    b.ToTable("ProductAttributeValues");
+                });
+
             modelBuilder.Entity("BackEnd.Models.ProductCategory", b =>
                 {
                     b.Property<int>("Id")
@@ -843,6 +904,39 @@ namespace API.Migrations
                         .IsUnique();
 
                     b.ToTable("ProductCategories");
+                });
+
+            modelBuilder.Entity("BackEnd.Models.ProductImage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AltText")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "SortOrder");
+
+                    b.ToTable("ProductImages");
                 });
 
             modelBuilder.Entity("BackEnd.Models.RefreshToken", b =>
@@ -1258,6 +1352,25 @@ namespace API.Migrations
                     b.Navigation("Brand");
                 });
 
+            modelBuilder.Entity("BackEnd.Models.ProductAttributeValue", b =>
+                {
+                    b.HasOne("BackEnd.Models.ProductAttribute", "Attribute")
+                        .WithMany()
+                        .HasForeignKey("AttributeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BackEnd.Models.Product", "Product")
+                        .WithMany("AttributeValues")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Attribute");
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("BackEnd.Models.ProductCategory", b =>
                 {
                     b.HasOne("BackEnd.Models.ProductCategory", "Parent")
@@ -1266,6 +1379,17 @@ namespace API.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Parent");
+                });
+
+            modelBuilder.Entity("BackEnd.Models.ProductImage", b =>
+                {
+                    b.HasOne("BackEnd.Models.Product", "Product")
+                        .WithMany("Images")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("BackEnd.Models.RefreshToken", b =>
@@ -1388,6 +1512,13 @@ namespace API.Migrations
             modelBuilder.Entity("BackEnd.Models.PostCategory", b =>
                 {
                     b.Navigation("Posts");
+                });
+
+            modelBuilder.Entity("BackEnd.Models.Product", b =>
+                {
+                    b.Navigation("AttributeValues");
+
+                    b.Navigation("Images");
                 });
 
             modelBuilder.Entity("BackEnd.Models.ProductCategory", b =>

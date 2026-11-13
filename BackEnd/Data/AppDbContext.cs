@@ -26,6 +26,9 @@ namespace BackEnd.Data
         public DbSet<SiteSetting> SiteSettings { get; set; }
         public DbSet<ContentRevision> ContentRevisions { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<ProductImage> ProductImages { get; set; }
+        public DbSet<ProductAttribute> ProductAttributes { get; set; }
+        public DbSet<ProductAttributeValue> ProductAttributeValues { get; set; }
 
         public DbSet<RefreshToken> RefreshTokens { get; set; }
 
@@ -201,6 +204,38 @@ namespace BackEnd.Data
                 .WithMany(i => i.Children)
                 .HasForeignKey(i => i.ParentId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<ProductImage>()
+                .HasOne(i => i.Product)
+                .WithMany(p => p.Images)
+                .HasForeignKey(i => i.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<ProductImage>()
+                .HasIndex(i => new { i.ProductId, i.SortOrder });
+
+            builder.Entity<ProductAttribute>()
+                .HasIndex(a => a.Slug)
+                .IsUnique();
+
+            builder.Entity<ProductAttributeValue>()
+                .HasOne(v => v.Product)
+                .WithMany(p => p.AttributeValues)
+                .HasForeignKey(v => v.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<ProductAttributeValue>()
+                .HasOne(v => v.Attribute)
+                .WithMany()
+                .HasForeignKey(v => v.AttributeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<ProductAttributeValue>()
+                .HasIndex(v => new { v.ProductId, v.AttributeId })
+                .IsUnique();
+
+            builder.Entity<ProductAttributeValue>()
+                .HasIndex(v => new { v.AttributeId, v.Value });
 
             builder.Entity<ContentRevision>()
                 .HasIndex(r => new { r.EntityType, r.EntityId, r.CreatedAt });

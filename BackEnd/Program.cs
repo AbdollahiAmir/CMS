@@ -69,6 +69,8 @@ builder.Services.AddScoped<IContentPageService, ContentPageService>();
 builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<IMediaService, MediaService>();
 builder.Services.AddScoped<IRevisionService, RevisionService>();
+builder.Services.AddScoped<IProductGalleryService, ProductGalleryService>();
+builder.Services.AddScoped<IProductAttributeService, ProductAttributeService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddHostedService<AuditLogCleanupService>();
 builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection("Site"));

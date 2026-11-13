@@ -42,6 +42,10 @@ namespace BackEnd.Models
 
         public ICollection<ProductCategory> Categories { get; set; } = new List<ProductCategory>();
 
+        public ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
+
+        public ICollection<ProductAttributeValue> AttributeValues { get; set; } = new List<ProductAttributeValue>();
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }

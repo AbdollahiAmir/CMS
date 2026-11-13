@@ -92,7 +92,52 @@ namespace BackEnd.Helpers
                 query = query.Where(p => p.Categories.Any(c => categoryIds.Contains(c.Id)));
             }
 
+            foreach (var group in ParseAttributeFilters(q.Attr))
+            {
+                var attributeId = group.Key;
+                var values = group.Value;
+
+                query = query.Where(p => p.AttributeValues.Any(v => v.AttributeId == attributeId && values.Contains(v.Value)));
+            }
+
             return query;
+        }
+
+        private static Dictionary<int, List<string>> ParseAttributeFilters(IEnumerable<string>? raw)
+        {
+            var result = new Dictionary<int, List<string>>();
+
+            if (raw is null)
+            {
+                return result;
+            }
+
+            foreach (var item in raw.Take(10))
+            {
+                var separator = item.IndexOf(':');
+
+                if (separator <= 0 || !int.TryParse(item[..separator], out var attributeId))
+                {
+                    continue;
+                }
+
+                var value = item[(separator + 1)..].Trim();
+
+                if (value.Length == 0 || value.Length > 250)
+                {
+                    continue;
+                }
+
+                if (!result.TryGetValue(attributeId, out var values))
+                {
+                    values = new List<string>();
+                    result[attributeId] = values;
+                }
+
+                values.Add(value);
+            }
+
+            return result;
         }
 
         public static async Task<PagedResult<T>> ToPagedAsync<T>(IQueryable<Product> query, ProductQueryDto q, Expression<Func<Product, T>> projection)

@@ -179,3 +179,21 @@ dotnet ef database update --project BackEnd
 هر درخواست موفق تغییردهنده (POST، PUT، PATCH، DELETE) از کاربر واردشده‌ی هر کنترلر به‌جز Auth در جدول `AuditLogs` ثبت می‌شود: کاربر، کنترلر، اکشن، متد، مسیر، شناسه‌ی موجودیت، کد وضعیت، آی‌پی و زمان. بدنه‌ی درخواست ذخیره نمی‌شود. شکست در ثبت لاگ باعث خطای درخواست نمی‌شود.
 
 `GET /api/AuditLogs` با مجوز `Audit.View` و فیلترهای `userId`، `controller`، `entityId`، `from`، `to`، `page` و `pageSize` (حداکثر ۲۰۰). لاگ‌های قدیمی‌تر از `Audit:RetentionDays` (پیش‌فرض ۱۸۰ روز، مقدار صفر یعنی بدون حذف) هر ۲۴ ساعت پاک می‌شوند. مجوز `Audit.View` برای نقش‌های سفارشی باید دستی اضافه شود.
+
+## گالری و ویژگی‌های محصول
+
+عکس اصلی محصول (`ImgPath`) به‌عنوان کاور باقی می‌ماند و هر محصول علاوه بر آن حداکثر ۱۰ تصویر گالری دارد.
+
+- `GET /api/Products/{id}/images`: فهرست تصاویر گالری (مجوز View)
+- `GET /api/Products/{id}/images/{imageId}/file?size=thumb`: فایل تصویر (مجوز View)
+- `POST /api/Products/{id}/images`: آپلود با `multipart/form-data` و فیلدهای `image` و `altText` (مجوز Manage، محدودیت نرخ `upload`)
+- `PATCH /api/Products/{id}/images/{imageId}`: ویرایش متن جایگزین
+- `PUT /api/Products/{id}/images/order`: ترتیب جدید با `{ "imageIds": [3, 1, 2] }`؛ باید دقیقاً همه‌ی تصاویر محصول باشند
+- `DELETE /api/Products/{id}/images/{imageId}`: حذف تصویر و فایل آن
+
+ویژگی‌ها دو بخش دارند: تعریف ویژگی (مثل «رنگ» یا «جنس») و مقدار آن برای هر محصول.
+
+- `GET/POST /api/ProductAttributes`، `PATCH/DELETE /api/ProductAttributes/{id}`: مدیریت تعریف ویژگی‌ها با `name`، `slug`، `sortOrder` و `isFilterable` (مجوزهای Products)؛ حذف ویژگی مقدارهای آن را هم حذف می‌کند
+- `GET /api/Products/{id}/attributes` و `PUT /api/Products/{id}/attributes`: خواندن و جایگزینی کامل مقدارها با `{ "items": [{ "attributeId": 1, "value": "قرمز" }] }`. مقدار خالی یعنی حذف آن ویژگی؛ حداکثر ۵۰ مورد
+- جزئیات محصول در پنل و سایت (`ProductDto` و `PublicProductDto`) فیلدهای `images` و `attributes` را دارد
+- سایت عمومی: `GET /api/PublicProducts/products/{id}/images/{imageId}?size=thumb`، `GET /api/PublicProducts/attributes` (ویژگی‌های فیلترپذیر با مقادیر محصولات فعال) و فیلتر فهرست محصولات با `attr=attributeId:value`، مثلاً `?attr=1:قرمز&attr=1:آبی&attr=2:پنبه` (OR میان مقدارهای یک ویژگی و AND میان ویژگی‌های مختلف، حداکثر ۱۰ شرط)

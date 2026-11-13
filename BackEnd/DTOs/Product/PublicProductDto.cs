@@ -15,5 +15,7 @@
         public bool HasImage { get; set; }
         public BrandSummaryDto? Brand { get; set; }
         public List<CategorySummaryDto> Categories { get; set; } = new();
+        public List<ProductImageDto> Images { get; set; } = new();
+        public List<ProductAttributeValueDto> Attributes { get; set; } = new();
     }
 }

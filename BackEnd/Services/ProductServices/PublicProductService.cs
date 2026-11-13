@@ -12,11 +12,19 @@ namespace BackEnd.Services.ProductServices
     {
         private readonly AppDbContext _context;
         private readonly IFileService _fileService;
+        private readonly IProductGalleryService _gallery;
+        private readonly IProductAttributeService _attributes;
 
-        public PublicProductService(AppDbContext context, IFileService fileService)
+        public PublicProductService(
+            AppDbContext context,
+            IFileService fileService,
+            IProductGalleryService gallery,
+            IProductAttributeService attributes)
         {
             _context = context;
             _fileService = fileService;
+            _gallery = gallery;
+            _attributes = attributes;
         }
 
         public async Task<PagedResult<PublicProductDto>> GetProductsAsync(ProductQueryDto query)
@@ -30,10 +38,30 @@ namespace BackEnd.Services.ProductServices
 
         public async Task<PublicProductDto?> GetBySlugAsync(string slug)
         {
-            return await _context.Products.AsNoTracking()
+            var product = await _context.Products.AsNoTracking()
                 .Where(p => p.IsActive && p.Slug == slug)
                 .Select(ProductQueryHelper.PublicProjection)
                 .FirstOrDefaultAsync();
+
+            if (product is null)
+            {
+                return null;
+            }
+
+            product.Images = await _gallery.GetImagesAsync(product.Id, true);
+            product.Attributes = await _attributes.GetValuesAsync(product.Id);
+
+            return product;
+        }
+
+        public async Task<List<FilterAttributeDto>> GetFilterAttributesAsync()
+        {
+            return await _attributes.GetFilterableAsync();
+        }
+
+        public async Task<(Stream Stream, string ContentType)?> GetGalleryImageAsync(int productId, int imageId, bool thumbnail = false)
+        {
+            return await _gallery.OpenAsync(productId, imageId, thumbnail, true);
         }
 
         public async Task<List<CartLookupItemDto>> LookupForCartAsync(IReadOnlyCollection<int> productIds)

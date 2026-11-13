@@ -47,6 +47,26 @@ namespace BackEnd.Controllers
             return Ok(product);
         }
 
+        [HttpGet("attributes")]
+        [OutputCache(PolicyName = "PublicShort")]
+        public async Task<IActionResult> GetFilterAttributes()
+        {
+            return Ok(await _service.GetFilterAttributesAsync());
+        }
+
+        [HttpGet("products/{id:int}/images/{imageId:int}")]
+        [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
+        public async Task<IActionResult> GetPublicGalleryImage(int id, int imageId, [FromQuery] string? size)
+        {
+            var image = await _service.GetGalleryImageAsync(id, imageId, ImageSize.IsThumbnail(size));
+            if (image is null)
+            {
+                return NotFound();
+            }
+
+            return File(image.Value.Stream, image.Value.ContentType);
+        }
+
         [HttpGet("products/{id:int}/image")]
         [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
         public async Task<IActionResult> GetPublicProductImage(int id, [FromQuery] string? size)

@@ -4,6 +4,7 @@ using BackEnd.DTOs.ProductDTOs;
 using BackEnd.IServices.IProductServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BackEnd.Controllers
 {
@@ -12,10 +13,17 @@ namespace BackEnd.Controllers
     public class ProductsController : ControllerBase
     {
         private readonly IProductService _service;
+        private readonly IProductGalleryService _gallery;
+        private readonly IProductAttributeService _attributes;
 
-        public ProductsController(IProductService service)
+        public ProductsController(
+            IProductService service,
+            IProductGalleryService gallery,
+            IProductAttributeService attributes)
         {
             _service = service;
+            _gallery = gallery;
+            _attributes = attributes;
         }
 
         [HttpGet]
@@ -56,6 +64,99 @@ namespace BackEnd.Controllers
             }
 
             return File(image.Value.Stream, image.Value.ContentType);
+        }
+
+        [HttpGet("{id:int}/images")]
+        [Authorize(Policy = AppPermissions.ProductsView)]
+        public async Task<IActionResult> GetGallery(int id)
+        {
+            return Ok(await _gallery.GetImagesAsync(id, false));
+        }
+
+        [HttpGet("{id:int}/images/{imageId:int}/file")]
+        [Authorize(Policy = AppPermissions.ProductsView)]
+        public async Task<IActionResult> GetGalleryImage(int id, int imageId, [FromQuery] string? size)
+        {
+            var image = await _gallery.OpenAsync(id, imageId, ImageSize.IsThumbnail(size), false);
+            if (image is null)
+            {
+                return NotFound();
+            }
+
+            return File(image.Value.Stream, image.Value.ContentType);
+        }
+
+        [HttpPost("{id:int}/images")]
+        [Consumes("multipart/form-data")]
+        [EnableRateLimiting("upload")]
+        [Authorize(Policy = AppPermissions.ProductsManage)]
+        public async Task<IActionResult> AddGalleryImage(int id, [FromForm] UploadProductImageDto dto)
+        {
+            var image = await _gallery.AddAsync(id, dto.Image, dto.AltText);
+            if (image is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(image);
+        }
+
+        [HttpPatch("{id:int}/images/{imageId:int}")]
+        [Authorize(Policy = AppPermissions.ProductsManage)]
+        public async Task<IActionResult> UpdateGalleryImage(int id, int imageId, [FromBody] UpdateProductImageDto dto)
+        {
+            var image = await _gallery.UpdateAsync(id, imageId, dto.AltText);
+            if (image is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(image);
+        }
+
+        [HttpPut("{id:int}/images/order")]
+        [Authorize(Policy = AppPermissions.ProductsManage)]
+        public async Task<IActionResult> ReorderGallery(int id, [FromBody] ReorderProductImagesDto dto)
+        {
+            var images = await _gallery.ReorderAsync(id, dto.ImageIds);
+            if (images is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(images);
+        }
+
+        [HttpDelete("{id:int}/images/{imageId:int}")]
+        [Authorize(Policy = AppPermissions.ProductsManage)]
+        public async Task<IActionResult> DeleteGalleryImage(int id, int imageId)
+        {
+            if (!await _gallery.DeleteAsync(id, imageId))
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+
+        [HttpGet("{id:int}/attributes")]
+        [Authorize(Policy = AppPermissions.ProductsView)]
+        public async Task<IActionResult> GetAttributes(int id)
+        {
+            return Ok(await _attributes.GetValuesAsync(id));
+        }
+
+        [HttpPut("{id:int}/attributes")]
+        [Authorize(Policy = AppPermissions.ProductsManage)]
+        public async Task<IActionResult> SetAttributes(int id, [FromBody] SetProductAttributesDto dto)
+        {
+            var values = await _attributes.SetValuesAsync(id, dto.Items);
+            if (values is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(values);
         }
 
         [HttpPost]

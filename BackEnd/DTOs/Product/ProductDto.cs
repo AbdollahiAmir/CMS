@@ -17,6 +17,8 @@
         public bool IsActive { get; set; }
         public BrandSummaryDto? Brand { get; set; }
         public List<CategorySummaryDto> Categories { get; set; } = new();
+        public List<ProductImageDto> Images { get; set; } = new();
+        public List<ProductAttributeValueDto> Attributes { get; set; } = new();
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public byte[] RowVersion { get; set; } = [];
