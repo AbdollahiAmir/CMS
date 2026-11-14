@@ -129,6 +129,46 @@ namespace BackEnd.Controllers
             return Ok(new { message = "خروج با موفقیت انجام شد" });
         }
 
+        [AllowAnonymous]
+        [EnableRateLimiting("auth")]
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword(ForgotPasswordDto dto, [FromServices] IAccountService account)
+        {
+            await account.ForgotPasswordAsync(dto.Email);
+
+            return Ok(new { message = "اگر ایمیل شما در سیستم تایید شده باشد، لینک بازیابی رمز برایتان ارسال می‌شود" });
+        }
+
+        [AllowAnonymous]
+        [EnableRateLimiting("auth")]
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword(ResetPasswordDto dto, [FromServices] IAccountService account)
+        {
+            var result = await account.ResetPasswordAsync(dto);
+
+            if (!result.IsSuccess)
+            {
+                return BadRequest(new { errors = result.Errors });
+            }
+
+            return Ok(new { message = "رمز عبور با موفقیت تغییر کرد، وارد شوید" });
+        }
+
+        [AllowAnonymous]
+        [EnableRateLimiting("auth")]
+        [HttpPost("confirm-email")]
+        public async Task<IActionResult> ConfirmEmail(ConfirmEmailDto dto, [FromServices] IAccountService account)
+        {
+            var result = await account.ConfirmEmailAsync(dto);
+
+            if (!result.IsSuccess)
+            {
+                return BadRequest(new { errors = result.Errors });
+            }
+
+            return Ok(new { message = "ایمیل با موفقیت تایید شد" });
+        }
+
         [Authorize]
         [HttpGet("me")]
         public IActionResult Me()

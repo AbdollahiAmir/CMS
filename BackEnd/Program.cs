@@ -75,6 +75,12 @@ builder.Services.AddScoped<IProductAttributeService, ProductAttributeService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddHostedService<AuditLogCleanupService>();
 builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection("Site"));
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
+builder.Services.Configure<DataProtectionTokenProviderOptions>(options =>
+    options.TokenLifespan = TimeSpan.FromHours(builder.Configuration.GetValue("Identity:TokenLifespanHours", 3)));
+builder.Services.AddSingleton<IMailSender, SmtpMailSender>();
+builder.Services.AddSingleton<ISmsSender, LoggingSmsSender>();
+builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<ISeoService, SeoService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<ISiteSettingsService, SiteSettingsService>();

@@ -8,6 +8,10 @@ namespace BackEnd.DTOs.Auth
         [StringLength(50, MinimumLength = 3)]
         public string UserName { get; set; } = string.Empty;
 
+        [EmailAddress(ErrorMessage = "ایمیل نامعتبر است")]
+        [MaxLength(256)]
+        public string? Email { get; set; }
+
         [Required]
         [DataType(DataType.Password)]
         [StringLength(128, MinimumLength = 8)]

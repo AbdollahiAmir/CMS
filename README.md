@@ -204,3 +204,28 @@ dotnet ef database update --project BackEnd
 
 - `GET /api/PublicContent/posts/{slug}/related?count=4`: مقاله‌های مرتبط (حداکثر ۱۲). امتیاز هر مقاله دو برابر تعداد برچسب مشترک به‌اضافه‌ی یک اگر هم‌دسته باشد؛ در امتیاز برابر جدیدترین جلوتر است
 - `GET /api/PublicContent/search?q=...&limit=5`: جست‌وجوی یکپارچه در مقاله‌ها، صفحه‌ها و محصولات فعال (عنوان، خلاصه، و برای محصول نام، کد و توضیح کوتاه). حداقل ۲ و حداکثر ۱۰۰ نویسه، `limit` تا ۲۰ در هر گروه، با محدودیت نرخ `lookup` و کش کوتاه
+
+## حساب کاربری، ایمیل و موبایل
+
+کاربر می‌تواند هنگام ثبت‌نام ایمیل (اختیاری) بدهد و بعداً ایمیل و موبایل را از پروفایل ثبت و تایید کند. مایگریشن `20261114080000_AddUserProfile` ستون `FullName` را به جدول کاربران اضافه می‌کند.
+
+مسیرهای `api/Account` (نیازمند ورود):
+
+- `GET /api/Account/profile` و `PATCH /api/Account/profile` (فیلد `fullName`)
+- `PUT /api/Account/email` با `{ "email": "..." }`: ثبت ایمیل جدید به‌صورت تاییدنشده و ارسال لینک تایید. یکتایی ایمیل در سرویس بررسی می‌شود
+- `POST /api/Account/email/resend-confirmation`
+- `PUT /api/Account/phone` با `{ "phoneNumber": "09123456789" }`: ارسال کد پیامکی. شماره‌ی فارسی، `+98` و `0098` به قالب `09xxxxxxxxx` نرمال می‌شود
+- `POST /api/Account/phone/verify` با `{ "phoneNumber": "...", "code": "123456" }`: تایید و ثبت شماره‌ی تاییدشده؛ شماره‌ی تاییدشده‌ی تکراری پذیرفته نمی‌شود
+
+مسیرهای بی‌نیاز از ورود در `api/Auth` (همه با محدودیت نرخ `auth`):
+
+- `POST /api/Auth/confirm-email` با `{ "userId", "token" }`
+- `POST /api/Auth/forgot-password` با `{ "email" }`: همیشه یک پاسخ یکسان می‌دهد تا وجود ایمیل لو نرود. فقط برای ایمیل تاییدشده لینک ارسال می‌شود و ارسال در پس‌زمینه انجام می‌شود
+- `POST /api/Auth/reset-password` با `{ "email", "token", "newPassword", "confirmPassword" }`: همه‌ی نشست‌های کاربر باطل و قفل حساب برداشته می‌شود
+
+تنظیمات:
+
+- بخش `Email` در `appsettings.json` (`Host`، `Port`، `EnableSsl`، `UserName`، `Password`، `FromAddress`، `FromName`) برای SMTP. `FrontendBaseUrl` آدرس سایت است و اگر خالی باشد `Site:BaseUrl` استفاده می‌شود؛ لینک‌ها به‌شکل `{FrontendBaseUrl}{ConfirmEmailPath}?userId=...&token=...` و `{FrontendBaseUrl}{ResetPasswordPath}?email=...&token=...` ساخته می‌شوند
+- `Identity:TokenLifespanHours` (پیش‌فرض ۳) مدت اعتبار لینک‌ها
+- اگر SMTP تنظیم نشده باشد، در محیط Development متن ایمیل در لاگ چاپ می‌شود و در Production فقط هشدار ثبت می‌شود
+- پیامک فعلاً از `LoggingSmsSender` استفاده می‌کند که فقط در Development کد را لاگ می‌کند. برای ارسال واقعی باید `ISmsSender` را با API سرویس پیامکی خودتان (مثل کاوه‌نگار یا ملی‌پیامک) پیاده و در `Program.cs` جایگزین کنید

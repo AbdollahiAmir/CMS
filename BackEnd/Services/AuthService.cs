@@ -18,17 +18,20 @@ namespace BackEnd.Services
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _config;
         private readonly IRefreshTokenService _refreshTokens;
+        private readonly IAccountService _account;
 
         public AuthService(
             UserManager<AppUser> userManager,
             RoleManager<IdentityRole> roleManager,
             IConfiguration config,
-            IRefreshTokenService refreshTokens)
+            IRefreshTokenService refreshTokens,
+            IAccountService account)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _config = config;
             _refreshTokens = refreshTokens;
+            _account = account;
         }
 
         private static AuthResult Fail(params string[] errors)
@@ -118,9 +121,17 @@ namespace BackEnd.Services
 
         public async Task<AuthResult> RegisterAsync(RegisterDto dto)
         {
+            var email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim();
+
+            if (email is not null && await _userManager.FindByEmailAsync(email) is not null)
+            {
+                return Fail("این ایمیل قبلا ثبت شده است");
+            }
+
             var user = new AppUser
             {
-                UserName = dto.UserName
+                UserName = dto.UserName,
+                Email = email
             };
 
             var result = await _userManager.CreateAsync(user, dto.Password);
@@ -135,6 +146,11 @@ namespace BackEnd.Services
             }
 
             await _userManager.AddToRoleAsync(user, AppRoles.Customer);
+
+            if (email is not null)
+            {
+                await _account.SendEmailConfirmationAsync(user);
+            }
 
             return new AuthResult { IsSuccess = true };
         }
