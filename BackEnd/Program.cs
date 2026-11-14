@@ -79,8 +79,19 @@ builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email
 builder.Services.Configure<DataProtectionTokenProviderOptions>(options =>
     options.TokenLifespan = TimeSpan.FromHours(builder.Configuration.GetValue("Identity:TokenLifespanHours", 3)));
 builder.Services.AddSingleton<IMailSender, SmtpMailSender>();
-builder.Services.AddSingleton<ISmsSender, LoggingSmsSender>();
+builder.Services.AddSingleton<ISmsSender, ConfigurableSmsSender>();
+builder.Services.AddMemoryCache();
+var dataProtectionBuilder = builder.Services.AddDataProtection().SetApplicationName("BackEnd");
+var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+}
+builder.Services.AddHttpClient("sms", client => client.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddScoped<IIntegrationSettingsService, IntegrationSettingsService>();
+builder.Services.AddScoped<IIntegrationService, IntegrationService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<ISeoService, SeoService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<ISiteSettingsService, SiteSettingsService>();
@@ -217,6 +228,15 @@ builder.Services.AddRateLimiter(options =>
         _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+
+    options.AddPolicy("comment", context => RateLimitPartition.GetFixedWindowLimiter(
+        ClientKey(context),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0
         }));

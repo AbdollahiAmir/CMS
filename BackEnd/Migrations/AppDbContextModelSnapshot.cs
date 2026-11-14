@@ -365,6 +365,28 @@ namespace API.Migrations
                     b.ToTable("ContentRevisions");
                 });
 
+            modelBuilder.Entity("BackEnd.Models.IntegrationSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ProtectedValue")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("IntegrationSettings");
+                });
+
             modelBuilder.Entity("BackEnd.Models.MediaFile", b =>
                 {
                     b.Property<int>("Id")
@@ -711,6 +733,63 @@ namespace API.Migrations
                         .IsUnique();
 
                     b.ToTable("PostCategories");
+                });
+
+            modelBuilder.Entity("BackEnd.Models.PostComment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AuthorEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("AuthorName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("ModeratedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModeratedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("PostId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IpAddress");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.HasIndex("PostId", "Status", "CreatedAt");
+
+                    b.ToTable("PostComments");
                 });
 
             modelBuilder.Entity("BackEnd.Models.Product", b =>
@@ -1344,6 +1423,17 @@ namespace API.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Category");
+                });
+
+            modelBuilder.Entity("BackEnd.Models.PostComment", b =>
+                {
+                    b.HasOne("BackEnd.Models.Post", "Post")
+                        .WithMany()
+                        .HasForeignKey("PostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Post");
                 });
 
             modelBuilder.Entity("BackEnd.Models.Product", b =>

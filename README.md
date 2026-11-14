@@ -228,4 +228,27 @@ dotnet ef database update --project BackEnd
 - بخش `Email` در `appsettings.json` (`Host`، `Port`، `EnableSsl`، `UserName`، `Password`، `FromAddress`، `FromName`) برای SMTP. `FrontendBaseUrl` آدرس سایت است و اگر خالی باشد `Site:BaseUrl` استفاده می‌شود؛ لینک‌ها به‌شکل `{FrontendBaseUrl}{ConfirmEmailPath}?userId=...&token=...` و `{FrontendBaseUrl}{ResetPasswordPath}?email=...&token=...` ساخته می‌شوند
 - `Identity:TokenLifespanHours` (پیش‌فرض ۳) مدت اعتبار لینک‌ها
 - اگر SMTP تنظیم نشده باشد، در محیط Development متن ایمیل در لاگ چاپ می‌شود و در Production فقط هشدار ثبت می‌شود
-- پیامک فعلاً از `LoggingSmsSender` استفاده می‌کند که فقط در Development کد را لاگ می‌کند. برای ارسال واقعی باید `ISmsSender` را با API سرویس پیامکی خودتان (مثل کاوه‌نگار یا ملی‌پیامک) پیاده و در `Program.cs` جایگزین کنید
+- ایمیل و پیامک را می‌توان از پنل مدیریت تنظیم کرد (بخش «یکپارچه‌سازی‌ها» پایین‌تر). مقدارهای `Email` در `appsettings.json` فقط وقتی استفاده می‌شوند که در پنل چیزی فعال نشده باشد
+
+## نظرات مقاله
+
+نظر مشتری‌ها ابتدا در وضعیت «در انتظار» ذخیره می‌شود و فقط بعد از تایید ادمین در سایت دیده می‌شود. ایمیل، آی‌پی و شناسه‌ی کاربر هرگز در خروجی عمومی نیست.
+
+- `GET /api/PublicContent/posts/{slug}/comments?page=1&pageSize=20`: فقط نظرهای تاییدشده
+- `POST /api/PublicContent/posts/{slug}/comments` با `{ "authorName", "authorEmail", "content", "website" }`: ثبت نظر؛ مهمان هم می‌تواند بفرستد و اگر کاربر واردشده باشد نامش خودکار پر می‌شود. فیلد `website` باید در فرم مخفی و خالی بماند (تله‌ی ربات). محدودیت نرخ `comment` (۵ در دقیقه)، حداکثر ۱۰ نظر در انتظار برای هر آی‌پی، و نظر تکراری رد می‌شود. متن به‌صورت متن ساده ذخیره می‌شود و فرانت باید آن را escape کند
+- مدیریت با مجوز `Comments.Moderate`: `GET /api/PostComments?status=0&postId=&search=` (۰ در انتظار، ۱ تاییدشده، ۲ ردشده)، `GET /api/PostComments/pending-count`، `PATCH /api/PostComments/{id}/status` با `{ "status": 1 }`، `POST /api/PostComments/bulk-status` با `{ "ids": [1,2], "status": 1 }` و `DELETE /api/PostComments/{id}`
+
+با حذف مقاله، نظرهایش هم حذف می‌شوند.
+
+## یکپارچه‌سازی‌ها (اینماد، درگاه پرداخت، ایمیل، پیامک)
+
+ادمین بدون دانش برنامه‌نویسی این‌ها را از پنل وارد می‌کند. مقدارها در جدول `IntegrationSettings` به‌صورت رمزشده (ASP.NET Data Protection) ذخیره می‌شوند و کلیدهای محرمانه هیچ‌وقت در پاسخ برنگردانده می‌شوند، فقط `passwordSet` یا `apiKeySet`. در ارسال‌ها، مقدار `null` یعنی «تغییر نده» و رشته‌ی خالی یعنی «پاک کن». هر مجوز جداگانه است و نقش Admin همه را دارد:
+
+- **اینماد** (`Enamad.Manage`): `GET/PUT /api/Integrations/enamad` با `{ "enabled": true, "input": "..." }`. در `input` می‌توان فقط کد اینماد یا کل کد HTML نماد (لینک و تصویر) را گذاشت؛ سیستم `id` و `Code` را خودش بیرون می‌کشد. سایت عمومی: `GET /api/PublicContent/trust-badges` شامل `metaName` و `code` برای تگ `<meta name="enamad" content="...">` و آدرس‌های `sealUrl` و `logoUrl` است؛ فرانت فقط همین‌ها را رندر می‌کند
+- **درگاه پرداخت** (`Payment.Manage`): `GET/PUT /api/Integrations/payment` با `provider` (`zarinpal`، `zibal`، `idpay`، `nextpay`)، `merchantId`، `apiKey` و `sandbox`. برای زرین‌پال و زیبال کد مرچنت و برای آیدی‌پی و نکست‌پی کلید API الزامی است. این بخش فقط تنظیمات را نگه می‌دارد؛ فرایند پرداخت سفارش هنوز نوشته نشده است
+- **ایمیل** (`Messaging.Manage`): `GET/PUT /api/Integrations/email` (سرور SMTP، پورت، SSL، نام کاربری، رمز، آدرس و نام فرستنده) و `POST /api/Integrations/email/test` با `{ "to": "..." }`
+- **پیامک** (`Messaging.Manage`): `GET/PUT /api/Integrations/sms` با `provider` (`kavenegar` یا `smsir`)، `apiKey` و `sender` (برای sms.ir شماره‌ی خط به‌صورت عدد) و `POST /api/Integrations/sms/test` با `{ "phoneNumber": "..." }`
+
+اتصال به کاوه‌نگار و sms.ir بر اساس مستندات عمومی نوشته شده و چون از اینجا به این سرویس‌ها دسترسی نبود، حتماً با دکمه‌ی ارسال آزمایشی امتحان شود. مقدارها تا ۵ دقیقه در حافظه کش می‌شوند.
+
+مهم: کلید رمزنگاری Data Protection باید ماندگار باشد وگرنه با هر دیپلوی در کانتینر، مقدارهای ذخیره‌شده قابل خواندن نمی‌شوند. مسیر یک پوشه‌ی پایدار (volume) را در `DataProtection:KeysPath` بگذارید.

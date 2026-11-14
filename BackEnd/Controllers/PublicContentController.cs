@@ -1,10 +1,12 @@
 ﻿using BackEnd.Helpers;
+using BackEnd.DTOs.Comments;
 using BackEnd.DTOs.PublicContent;
 using BackEnd.IServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace BackEnd.Controllers
 {
@@ -83,6 +85,38 @@ namespace BackEnd.Controllers
         public async Task<IActionResult> Search([FromQuery] PublicSearchQueryDto query)
         {
             return Ok(await _service.SearchAsync(query.Q ?? string.Empty, query.Limit));
+        }
+
+        [HttpGet("posts/{slug}/comments")]
+        [OutputCache(PolicyName = "PublicShort")]
+        public async Task<IActionResult> GetComments(string slug, [FromQuery] CommentQueryDto query, [FromServices] ICommentService comments)
+        {
+            var result = await comments.GetApprovedAsync(slug, query);
+
+            if (result is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(result);
+        }
+
+        [HttpPost("posts/{slug}/comments")]
+        [EnableRateLimiting("comment")]
+        public async Task<IActionResult> SubmitComment(string slug, [FromBody] CreateCommentDto dto, [FromServices] ICommentService comments)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var userName = User.Identity?.IsAuthenticated == true ? User.Identity.Name : null;
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+
+            var accepted = await comments.SubmitAsync(slug, dto, userId, userName, ip);
+
+            if (accepted is null)
+            {
+                return NotFound();
+            }
+
+            return Accepted(new { message = "نظر شما ثبت شد و پس از تایید مدیر نمایش داده می‌شود" });
         }
 
         [HttpGet("categories")]

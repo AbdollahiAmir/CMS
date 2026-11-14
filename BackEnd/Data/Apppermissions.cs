@@ -33,6 +33,10 @@ namespace BackEnd.Data
         public const string SettingsManage = "Settings.Manage";
         public const string AuditView = "Audit.View";
         public const string AuthorsView = "Authors.View";
+        public const string CommentsModerate = "Comments.Moderate";
+        public const string EnamadManage = "Enamad.Manage";
+        public const string PaymentManage = "Payment.Manage";
+        public const string MessagingManage = "Messaging.Manage";
 
         public static readonly IReadOnlyList<string> All =
         [
@@ -58,7 +62,11 @@ namespace BackEnd.Data
             MenusManage,
             SettingsManage,
             AuditView,
-            AuthorsView
+            AuthorsView,
+            CommentsModerate,
+            EnamadManage,
+            PaymentManage,
+            MessagingManage
         ];
     }
 }

@@ -26,6 +26,8 @@ namespace BackEnd.Data
         public DbSet<SiteSetting> SiteSettings { get; set; }
         public DbSet<ContentRevision> ContentRevisions { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<PostComment> PostComments { get; set; }
+        public DbSet<IntegrationSetting> IntegrationSettings { get; set; }
         public DbSet<ProductImage> ProductImages { get; set; }
         public DbSet<ProductAttribute> ProductAttributes { get; set; }
         public DbSet<ProductAttributeValue> ProductAttributeValues { get; set; }
@@ -236,6 +238,21 @@ namespace BackEnd.Data
 
             builder.Entity<ProductAttributeValue>()
                 .HasIndex(v => new { v.AttributeId, v.Value });
+
+            builder.Entity<PostComment>()
+                .HasOne(c => c.Post)
+                .WithMany()
+                .HasForeignKey(c => c.PostId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<PostComment>()
+                .HasIndex(c => new { c.PostId, c.Status, c.CreatedAt });
+
+            builder.Entity<PostComment>()
+                .HasIndex(c => new { c.Status, c.CreatedAt });
+
+            builder.Entity<PostComment>()
+                .HasIndex(c => c.IpAddress);
 
             builder.Entity<ContentRevision>()
                 .HasIndex(r => new { r.EntityType, r.EntityId, r.CreatedAt });

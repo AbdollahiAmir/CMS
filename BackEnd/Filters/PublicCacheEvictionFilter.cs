@@ -26,7 +26,9 @@ namespace BackEnd.Filters
             "ProductAttributes",
             "Brands",
             "Menus",
-            "SiteSettings"
+            "SiteSettings",
+            "PostComments",
+            "Integrations"
         };
 
         private readonly IOutputCacheStore _store;
